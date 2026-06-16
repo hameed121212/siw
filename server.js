@@ -45,7 +45,7 @@ const getIndexHTML = (centers, dbError = null) => {
         <h1>Small Industries Wing Balochistan</h1>
         <p>Government of Balochistan Directorate Portal System</p>
     </div>
-    ${dbError ? `<div class="alert-error"><strong>Database Connection Wait Check:</strong> ${dbError}</div>` : ''}
+    ${dbError ? `<div class="alert-error"><strong>Active Notice:</strong> No data models loaded yet. Seed your Neon DB. Error: ${dbError}</div>` : ''}
     <div class="wrapper">
         <div class="card">
             <h2>Trainee Registration Desk</h2>
@@ -56,7 +56,7 @@ const getIndexHTML = (centers, dbError = null) => {
                 <label>Target Assignment Training Center</label>
                 <select name="center_id" required>
                     <option value="">-- Choose Center Selection --</option>
-                    ${safeCenters.map(c => `<option value="${c.id}">${c.name_of_center}</option>`).join('')}
+                    ${safeCenters.map(c => `<option value="${c.id}">${c.name_of_center || 'Unnamed Center'}</option>`).join('')}
                 </select>
                 <label>Course Program</label><input type="text" name="course_name" placeholder="e.g. Computer Application" required>
                 
@@ -93,7 +93,7 @@ const getAdminHTML = (centers, trainees, documents) => {
   const safeTrainees = Array.isArray(trainees) ? trainees : [];
   const safeDocs = Array.isArray(documents) ? documents : [];
   
-  // Extract dynamic columns list safely from first item if it exists
+  // Extract dynamic columns list safely with fallback protection
   const dynamicCols = (safeCenters.length > 0 && safeCenters[0].dynamic_columns) ? Object.keys(safeCenters[0].dynamic_columns) : [];
   
   return `
@@ -136,7 +136,7 @@ const getAdminHTML = (centers, trainees, documents) => {
                 </tr>
             </thead>
             <tbody>
-                ${safeCenters.map(c => `
+                ${safeCenters.length === 0 ? '<tr><td colspan="6">No centers found. Add centers via database or panel.</td></tr>' : safeCenters.map(c => `
                     <tr>
                         <td>${c.s_no || '-'}</td>
                         <td><code>${c.ddo_code || '-'}</code></td>
@@ -174,10 +174,6 @@ const getAdminHTML = (centers, trainees, documents) => {
                 </tr>
             </thead>
             <tbody>
-                ${safeTrainees.map(t => `
+                ${safeTrainees.length === 0 ? '<tr><td colspan="7">No registered trainee applications recorded yet.</td></tr>' : safeTrainees.map(t => `
                     <tr>
                         <td><code>${t.trainee_id || '-'}</code></td>
-                        <td><strong>${t.full_name || '-'}</strong></td>
-                        <td>${t.cnic || '-'}</td>
-                        <td>${t.course_name || '-'}</td>
-                        <td>Dist: ${t.district || '-'}<br>Tehsil: ${t.tehsil || '-'}</td>
