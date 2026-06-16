@@ -1,84 +1,57 @@
-:root {
-  --primary: #1b4332;
-  --primary-light: #2d6a4f;
-  --accent: #b7094c;
-  --dark: #212529;
-  --light: #f8f9fa;
-  --success: #40916c;
-  --warning: #ffb703;
-}
-
 body {
-  font-family: 'Segoe UI', system-ui, sans-serif;
-  background-color: #f0f2f5;
-  margin: 0;
-  padding: 0;
-  color: var(--dark);
+    font-family: 'Arial', sans-serif;
+    background-color: #0c2310;
+    margin: 0;
+    padding: 0;
+    color: #333;
 }
-
-header {
-  background: linear-gradient(135deg, #0f2b1d 0%, #1b4332 100%);
-  color: white;
-  text-align: center;
-  padding: 30px 10px;
-  border-bottom: 5px solid #a3b18a;
+.header-banner {
+    background-color: #1b4332;
+    color: white;
+    text-align: center;
+    padding: 30px;
 }
-
-header h1 { margin: 0; font-size: 2.2rem; text-transform: uppercase; letter-spacing: 1px; }
-header p { margin: 5px 0 0 0; opacity: 0.8; }
-
-.main-layout {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 30px;
-  max-width: 1300px;
-  margin: 40px auto;
-  padding: 0 20px;
+.portal-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 30px;
+    max-width: 1200px;
+    margin: 40px auto;
+    padding: 0 20px;
 }
-
-@media(max-width: 850px) { .main-layout { grid-template-columns: 1fr; } }
-
-.card {
-  background: white;
-  padding: 30px;
-  border-radius: 8px;
-  box-shadow: 0 4px 15px rgba(0,0,0,0.05);
-  border-top: 4px solid var(--primary-light);
+@media (max-width: 768px) {
+    .portal-grid { grid-template-columns: 1fr; }
 }
-
-h2, h3, h4 { color: var(--primary); margin-top: 0; }
-hr { border: 0; border-top: 1px solid #ddd; margin: 20px 0; }
-
-.form-group { margin-bottom: 15px; }
-.form-group label { display: block; margin-bottom: 6px; font-weight: 600; font-size: 0.9rem; }
-.form-group input, .form-group select {
-  width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-size: 1rem;
+.panel-box {
+    background: white;
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
 }
-
-button, .btn {
-  background-color: var(--primary); color: white; border: none; padding: 12px 20px;
-  border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; text-transform: uppercase;
+h2, h3 { color: #1b4332; }
+.form-group {
+    margin-bottom: 15px;
 }
-button:hover, .btn:hover { background-color: var(--primary-light); }
-
-.table-container { overflow-x: auto; margin-top: 15px; background: white; border-radius: 6px; }
-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.9rem; }
-th, td { padding: 12px 15px; border-bottom: 1px solid #eee; }
-th { background-color: var(--primary); color: white; }
-tr:hover { background-color: #f9f9f9; }
-
-.badge { padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 0.75rem; }
-.badge.Pending { background: #ffe3a8; color: #b25e00; }
-.badge.Approved { background: #d8f3dc; color: #1b4332; }
-.badge.Rejected { background: #f8d7da; color: #721c24; }
-.badge.Functional { background: #d8f3dc; color: #1b4332; }
-.badge.Non-Functional { background: #f8d7da; color: #721c24; }
-
-.tabs { display: flex; gap: 10px; margin-bottom: 20px; border-bottom: 2px solid #ccc; padding-bottom: 10px; }
-.tab-btn { background: #ddd; color: #333; width: auto; padding: 8px 16px; text-transform: none; }
-.tab-btn.active { background: var(--primary); color: white; }
-.tab-content { display: none; }
-.tab-content.active { display: block; }
-
-.doc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-.doc-card { background: #f1f5f9; padding: 15px; border-radius: 6px; border-left: 4px solid var(--accent); }
+label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+input, select {
+    width: 100%;
+    padding: 10px;
+    box-sizing: border-box;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+}
+button {
+    background-color: #2d6a4f;
+    color: white;
+    padding: 12px 20px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    width: 100%;
+    font-weight: bold;
+}
+button:hover { background-color: #1b4332; }
