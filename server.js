@@ -7,7 +7,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'siw_balochistan_secure_key_2026';
 
-// Initialize Database Connection Pool
+// Initialize Database Connection Pool with SSL Mode Forced
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
@@ -45,7 +45,7 @@ const getIndexHTML = (centers, dbError = null) => {
         <h1>Small Industries Wing Balochistan</h1>
         <p>Government of Balochistan Directorate Portal System</p>
     </div>
-    ${dbError ? `<div class="alert-error"><strong>Database Connection Error:</strong> ${dbError}</div>` : ''}
+    ${dbError ? `<div class="alert-error"><strong>Database Error:</strong> ${dbError}</div>` : ''}
     <div class="wrapper">
         <div class="card">
             <h2>Trainee Registration Desk</h2>
@@ -89,7 +89,12 @@ const getIndexHTML = (centers, dbError = null) => {
 // 2. ADMIN COMMAND DASHBOARD HTML TEMPLATE
 // ==========================================
 const getAdminHTML = (centers, trainees, documents) => {
-  const dynamicCols = (centers.length > 0 && centers[0].dynamic_columns) ? Object.keys(centers[0].dynamic_columns) : [];
+  const safeCenters = Array.isArray(centers) ? centers : [];
+  const safeTrainees = Array.isArray(trainees) ? trainees : [];
+  const safeDocs = Array.isArray(documents) ? documents : [];
+  
+  // Extract dynamic columns list safely from first item if it exists
+  const dynamicCols = (safeCenters.length > 0 && safeCenters[0].dynamic_columns) ? Object.keys(safeCenters[0].dynamic_columns) : [];
   
   return `
 <!DOCTYPE html>
@@ -117,7 +122,6 @@ const getAdminHTML = (centers, trainees, documents) => {
         <a href="/auth/logout" style="color: white; border:1px solid white; padding:8px 15px; text-decoration:none; border-radius:4px; font-weight:bold;">Logout</a>
     </div>
 
-    <!-- Section 1: Training Centers with Dynamic Columns Extension -->
     <div class="section">
         <h3>🏠 Training Centers Directory</h3>
         <form action="/admin/add-column" method="POST" style="margin-bottom:20px;">
@@ -132,22 +136,21 @@ const getAdminHTML = (centers, trainees, documents) => {
                 </tr>
             </thead>
             <tbody>
-                ${centers.map(c => `
+                ${safeCenters.map(c => `
                     <tr>
                         <td>${c.s_no || '-'}</td>
-                        <td><code>${c.ddo_code}</code></td>
-                        <td><strong>${c.name_of_center}</strong></td>
-                        <td>${c.status}</td>
-                        <td>${c.type}</td>
-                        <td>${c.ddo_name}</td>
-                        ${dynamicCols.map(col => `<td>${c.dynamic_columns[col] || '-'}</td>`).join('')}
+                        <td><code>${c.ddo_code || '-'}</code></td>
+                        <td><strong>${c.name_of_center || '-'}</strong></td>
+                        <td>${c.status || '-'}</td>
+                        <td>${c.type || '-'}</td>
+                        <td>${c.ddo_name || 'Unassigned'}</td>
+                        ${dynamicCols.map(col => `<td>${(c.dynamic_columns && c.dynamic_columns[col]) ? c.dynamic_columns[col] : '-'}</td>`).join('')}
                     </tr>
                 `).join('')}
             </tbody>
         </table>
     </div>
 
-    <!-- Section 2: Create Safe Multi-User Accounts for DDOs -->
     <div class="section">
         <h3>🔐 Generate DDO User Workspace Access</h3>
         <form action="/admin/create-ddo" method="POST">
@@ -155,13 +158,12 @@ const getAdminHTML = (centers, trainees, documents) => {
             <input type="password" name="password" class="input-box" placeholder="Assign Secure Password" required>
             <select name="center_id" class="input-box" required>
                 <option value="">Select Center Scope Binding</option>
-                ${centers.map(c => `<option value="${c.id}">${c.name_of_center}</option>`).join('')}
+                ${safeCenters.map(c => `<option value="${c.id}">${c.name_of_center}</option>`).join('')}
             </select>
             <button type="submit" class="btn">Create User Account</button>
         </form>
     </div>
 
-    <!-- Section 3: Trainees Log Registry containing Geographic & Financial Fields -->
     <div class="section">
         <h3>👥 Registered Trainees Ledger Profile</h3>
         <table>
@@ -172,15 +174,10 @@ const getAdminHTML = (centers, trainees, documents) => {
                 </tr>
             </thead>
             <tbody>
-                ${trainees.map(t => `
+                ${safeTrainees.map(t => `
                     <tr>
-                        <td><code>${t.trainee_id}</code></td>
-                        <td><strong>${t.full_name}</strong></td>
-                        <td>${t.cnic}</td>
-                        <td>${t.course_name}</td>
-                        <td>Dist: ${t.district}<br>Tehsil: ${t.tehsil}</td>
-                        <td>Vendor: ${t.vendor_number || '-'}<br>Acc: ${t.bank_account_number || '-'}<br>EasyPaisa: ${t.easypaisa_number || '-'}</td>
-                        <td><mark>${t.status}</mark></td>
-                    </tr>
-                `).join('')}
-            </tbody>
+                        <td><code>${t.trainee_id || '-'}</code></td>
+                        <td><strong>${t.full_name || '-'}</strong></td>
+                        <td>${t.cnic || '-'}</td>
+                        <td>${t.course_name || '-'}</td>
+                        <td>Dist: ${t.district || '-'}<br>Tehsil: ${t.tehsil || '-'}</td>
