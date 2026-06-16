@@ -8,46 +8,34 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'siw_balochistan_secure_key_2026';
 
-// Safe Database Connection Pool Configuration
+// Initialize Database Connection Pool
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false
+  ssl: { rejectUnauthorized: false }
 });
 
-// Test connection on launch to pinpoint bugs safely without crashing the server
-pool.connect((err, client, release) => {
-  if (err) {
-    console.error('Database connection failed explicitly:', err.message);
-  } else {
-    console.log('Database successfully handshake established.');
-    release();
-  }
-});
-
-// Force explicit absolute paths for EJS templates under Vercel Serverless environment
+// Configure Absolute Paths for Vercel Serverless
 app.set('views', path.join(__dirname, 'public', 'views'));
 app.set('view engine', 'ejs');
 
-// Middlewares
+// Apply Global Middlewares
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(cookieParser());
 
-// --- 1. PUBLIC LANDING PAGE & TRAINEE REGISTRATION FORM ---
+// --- 1. PUBLIC INDEX ROUTE ---
 app.get('/', async (req, res) => {
   try {
-    // Dynamic loading of centers into the dropdown selection menu
     const centersRes = await pool.query('SELECT id, name_of_center FROM training_centers ORDER BY s_no ASC');
-    res.render('index', { centers: centersRes.rows });
+    res.render('index', { centers: centersRes.rows || [] });
   } catch (err) {
-    console.error('Home route error:', err.message);
-    // Fallback array prevents EJS from throwing a compilation error if the database is unpopulated
-    res.render('index', { centers: [] }); 
+    console.error(err);
+    res.render('index', { centers: [] }); // Safe fallback to prevent server failure
   }
 });
 
-// --- 2. TRAINEE FORM SUBMISSION WORKFLOW ---
+// --- 2. PUBLIC SUBMISSION HANDLER ---
 app.post('/submit-trainee', async (req, res) => {
   const { 
     full_name, cnic, mobile_number, center_id, course_name,
@@ -75,11 +63,11 @@ app.post('/submit-trainee', async (req, res) => {
     res.send(`Submission successful! Your Trainee ID is: ${specialTraineeId}`);
   } catch (err) {
     console.error(err);
-    res.status(500).send("Database submission submission failure.");
+    res.status(500).send("Database submission failure.");
   }
 });
 
-// --- 3. SECURE AUTHENTICATION LINK ---
+// --- 3. MANAGEMENT TERMINAL LOGIN PANEL ---
 app.post('/auth/login', async (req, res) => {
   const { username, password } = req.body;
   try {
@@ -101,11 +89,12 @@ app.post('/auth/login', async (req, res) => {
     if (user.role === 'Admin') return res.redirect('/admin/dashboard');
     if (user.role === 'DDO') return res.redirect('/ddo/dashboard');
   } catch (err) {
+    console.error(err);
     res.status(500).send('Authentication endpoint error.');
   }
 });
 
-// --- 4. SECURE ACCESS MIDDLEWARE ---
+// --- 4. SECURE ROLE GATEKEEPER ---
 const verifyAccess = (role) => {
   return (req, res, next) => {
     const token = req.cookies.portal_token;
@@ -116,12 +105,12 @@ const verifyAccess = (role) => {
       if (role && req.user.role !== role) return res.status(403).send('Unauthorized.');
       next();
     } catch (err) {
-      return res.status(400).send('Session broken or expired.');
+      return res.status(400).send('Session expired.');
     }
   };
 };
 
-// --- 5. ADMIN CONTROL PANEL ---
+// --- 5. SUPER ADMIN CONTROL INTERFACE ---
 app.get('/admin/dashboard', verifyAccess('Admin'), async (req, res) => {
   try {
     const centers = await pool.query('SELECT * FROM training_centers ORDER BY s_no ASC');
@@ -130,17 +119,18 @@ app.get('/admin/dashboard', verifyAccess('Admin'), async (req, res) => {
     const users = await pool.query('SELECT u.*, c.name_of_center FROM users u LEFT JOIN training_centers c ON u.center_id = c.id');
     
     res.render('admin', { 
-      centers: centers.rows, 
-      trainees: trainees.rows, 
-      documents: documents.rows,
-      users: users.rows
+      centers: centers.rows || [], 
+      trainees: trainees.rows || [], 
+      documents: documents.rows || [],
+      users: users.rows || []
     });
   } catch (err) {
+    console.error(err);
     res.status(500).send('Error compiling dashboard arrays.');
   }
 });
 
-// --- 6. ADMIN ADD CUSTOM COLUMN DYNAMICALLY ---
+// --- 6. ADMIN CREATE EXTRA TABLE COLUMN ---
 app.post('/admin/add-column', verifyAccess('Admin'), async (req, res) => {
   const { columnName } = req.body;
   const safeKey = columnName.trim().replace(/\s+/g, '_').toLowerCase();
@@ -152,7 +142,7 @@ app.post('/admin/add-column', verifyAccess('Admin'), async (req, res) => {
   }
 });
 
-// --- 7. ADMIN CREATE DDO USER ACCOUNT ---
+// --- 7. ADMIN REGISTER NEW USER ACCESS ACCOUNT ---
 app.post('/admin/create-ddo', verifyAccess('Admin'), async (req, res) => {
   const { username, password, center_id } = req.body;
   try {
@@ -163,7 +153,7 @@ app.post('/admin/create-ddo', verifyAccess('Admin'), async (req, res) => {
   }
 });
 
-// --- 8. ADMIN TRANSMIT DOCUMENT ---
+// --- 8. ADMIN UPLOAD DOCUMENT RESOURCE ---
 app.post('/admin/upload-document', verifyAccess('Admin'), async (req, res) => {
   const { title, file_url } = req.body;
   try {
@@ -174,7 +164,7 @@ app.post('/admin/upload-document', verifyAccess('Admin'), async (req, res) => {
   }
 });
 
-// --- 9. DDO ISOLATED DATA SCREEN ---
+// --- 9. DDO ISOLATED DATA SCOPE ---
 app.get('/ddo/dashboard', verifyAccess('DDO'), async (req, res) => {
   try {
     const centerRes = await pool.query('SELECT * FROM training_centers WHERE id = $1', [req.user.center_id]);
@@ -184,16 +174,17 @@ app.get('/ddo/dashboard', verifyAccess('DDO'), async (req, res) => {
 
     res.render('ddo', {
       center: centerRes.rows[0] || {},
-      trainees: trainees.rows,
-      incomingDocs: incoming.rows,
-      outgoingDocs: outgoing.rows
+      trainees: trainees.rows || [],
+      incomingDocs: incoming.rows || [],
+      outgoingDocs: outgoing.rows || []
     });
   } catch (err) {
+    console.error(err);
     res.status(500).send('Error initializing DDO scope matrix.');
   }
 });
 
-// --- 10. DDO TRANSMIT RECORD UPWARDS ---
+// --- 10. DDO RESPOND UPWARDS WITH TRANSMITTED DOCUMENT ---
 app.post('/ddo/upload-document', verifyAccess('DDO'), async (req, res) => {
   const { title, file_url } = req.body;
   try {
@@ -204,7 +195,7 @@ app.post('/ddo/upload-document', verifyAccess('DDO'), async (req, res) => {
   }
 });
 
-// --- 11. DDO UPDATE TRAINEE STATUS LEVEL ---
+// --- 11. DDO UPDATE RECORD FIELD STATUS ---
 app.post('/ddo/update-trainee-status', verifyAccess('DDO'), async (req, res) => {
   const { id, status } = req.body;
   try {
@@ -215,12 +206,12 @@ app.post('/ddo/update-trainee-status', verifyAccess('DDO'), async (req, res) => 
   }
 });
 
-// --- 12. LOGOUT SYSTEM ---
+// --- 12. LOGOUT LOGIC ---
 app.get('/auth/logout', (req, res) => {
   res.clearCookie('portal_token');
   res.redirect('/');
 });
 
-app.listen(PORT, () => console.log(`Server handling stack running cleanly on port ${PORT}`));
+app.listen(PORT, () => console.log(`Server execution initialized on port ${PORT}`));
 
 module.exports = app;
