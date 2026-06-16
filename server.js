@@ -17,24 +17,23 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(cookieParser());
 
-// --- RAW HTML LAYOUTS (Embedded to bypass path resolution errors) ---
+// ==========================================
+// 1. PUBLIC LANDING PAGE HTML TEMPLATE
+// ==========================================
 const getIndexHTML = (centers, dbError = null) => {
-  // Ensure centers is always handled as a valid array to prevent .map() crashes
   const safeCenters = Array.isArray(centers) ? centers : [];
-  
   return `
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <title>Small Industries Wing Balochistan</title>
+    <meta charset="UTF-8"><title>Small Industries Wing Balochistan</title>
     <style>
         body { font-family: sans-serif; background: #f4f7f5; color: #2d3142; margin: 0; padding: 0; }
         .header { background: #1e4620; color: white; text-align: center; padding: 20px 10px; }
         .wrapper { max-width: 1100px; margin: 30px auto; display: grid; grid-template-columns: 1fr 1fr; gap: 30px; padding: 0 20px; }
         .card { background: white; padding: 25px; border-radius: 6px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
         .alert-error { background: #f8d7da; color: #721c24; padding: 15px; border-radius: 4px; margin: 20px auto; max-width: 1060px; border: 1px solid #f5c6cb; text-align: center; }
-        h2 { color: #1e4620; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; }
+        h2 { color: #1e4620; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-top: 20px; }
         label { display: block; margin: 12px 0 6px; font-weight: bold; font-size: 14px; }
         input, select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
         button { background: #2d6a4f; color: white; border: none; padding: 12px; border-radius: 4px; font-weight: bold; width: 100%; margin-top: 15px; cursor: pointer; }
@@ -46,9 +45,7 @@ const getIndexHTML = (centers, dbError = null) => {
         <h1>Small Industries Wing Balochistan</h1>
         <p>Government of Balochistan Directorate Portal System</p>
     </div>
-
-    ${dbError ? `<div class="alert-error"><strong>Database Connection Notice:</strong> ${dbError}<br><small>Please verify your Vercel DATABASE_URL Environment Variable string configuration.</small></div>` : ''}
-
+    ${dbError ? `<div class="alert-error"><strong>Database Connection Error:</strong> ${dbError}</div>` : ''}
     <div class="wrapper">
         <div class="card">
             <h2>Trainee Registration Desk</h2>
@@ -56,13 +53,11 @@ const getIndexHTML = (centers, dbError = null) => {
                 <label>Full Name</label><input type="text" name="full_name" placeholder="Enter Full Name" required>
                 <label>CNIC Number</label><input type="text" name="cnic" placeholder="Format: 54400-0000000-0" required>
                 <label>Mobile Contact Number</label><input type="text" name="mobile_number" placeholder="Enter Mobile Number" required>
-                
                 <label>Target Assignment Training Center</label>
                 <select name="center_id" required>
                     <option value="">-- Choose Center Selection --</option>
-                    ${safeCenters.map(c => `<option value="${c.id}">${c.name_of_center || 'Unnamed Center'}</option>`).join('')}
+                    ${safeCenters.map(c => `<option value="${c.id}">${c.name_of_center}</option>`).join('')}
                 </select>
-                
                 <label>Course Program</label><input type="text" name="course_name" placeholder="e.g. Computer Application" required>
                 
                 <h2>🌍 Geographical Information</h2>
@@ -74,7 +69,7 @@ const getIndexHTML = (centers, dbError = null) => {
                 <label>Vendor Number</label><input type="text" name="vendor_number" placeholder="Enter Govt Vendor Code">
                 <label>Bank Account Number (IBAN)</label><input type="text" name="bank_account_number" placeholder="PK00BANK...">
                 <label>EasyPaisa Mobile Wallet Number</label><input type="text" name="easypaisa_number" placeholder="03XXXXXXXXX">
-                <button type="submit">Submit Enrolment File Form</button>
+                <button type="submit">Submit Enrolment Form</button>
             </form>
         </div>
         <div class="card">
@@ -90,78 +85,102 @@ const getIndexHTML = (centers, dbError = null) => {
 </html>`;
 };
 
-// --- HOME ROUTE WITH CRASH PROTECTION ---
-app.get('/', async (req, res) => {
-  try {
-    const centersRes = await pool.query('SELECT id, name_of_center FROM training_centers ORDER BY s_no ASC');
-    const centerRows = (centersRes && centersRes.rows) ? centersRes.rows : [];
-    res.send(getIndexHTML(centerRows));
-  } catch (err) {
-    console.error("Database fetch crashed on landing screen:", err.message);
-    // Graceful fallback display instead of throwing a Vercel 500 error page
-    res.send(getIndexHTML([], err.message));
-  }
-});
+// ==========================================
+// 2. ADMIN COMMAND DASHBOARD HTML TEMPLATE
+// ==========================================
+const getAdminHTML = (centers, trainees, documents) => {
+  const dynamicCols = (centers.length > 0 && centers[0].dynamic_columns) ? Object.keys(centers[0].dynamic_columns) : [];
+  
+  return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"><title>Admin Control Terminal</title>
+    <style>
+        body { font-family: sans-serif; background: #f8fafc; margin: 0; padding: 20px; color: #334155; }
+        .nav { background: #1e4620; color: white; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; border-radius: 6px; }
+        .section { background: white; padding: 25px; margin-top: 25px; border-radius: 6px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        h3 { color: #1e4620; margin-top: 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 13px; }
+        th, td { padding: 12px; border: 1px solid #cbd5e1; text-align: left; }
+        th { background: #f1f5f9; color: #1e4620; font-weight: bold; }
+        .btn { background: #2d6a4f; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        .btn:hover { background: #1b4332; }
+        .input-box { padding: 10px; border: 1px solid #cbd5e1; border-radius: 4px; margin-right: 10px; min-width: 200px; }
+        .doc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 25px; }
+        code { background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="nav">
+        <h2>Small Industries Wing Balochistan — Master Control Panel</h2>
+        <a href="/auth/logout" style="color: white; border:1px solid white; padding:8px 15px; text-decoration:none; border-radius:4px; font-weight:bold;">Logout</a>
+    </div>
 
-// --- PUBLIC SUBMISSION HANDLER ---
-app.post('/submit-trainee', async (req, res) => {
-  const { full_name, cnic, mobile_number, center_id, course_name, district, tehsil, union_council, vendor_number, bank_account_number, easypaisa_number } = req.body;
-  try {
-    const year = new Date().getFullYear();
-    const countRes = await pool.query("SELECT COUNT(*) FROM trainees WHERE trainee_id LIKE $1", [`SIW-BAL-${year}-%`]);
-    const currentCount = (countRes && countRes.rows && countRes.rows[0]) ? parseInt(countRes.rows[0].count || 0) : 0;
-    const nextSequence = String(currentCount + 1).padStart(4, '0');
-    const specialTraineeId = `SIW-BAL-${year}-${nextSequence}`;
+    <!-- Section 1: Training Centers with Dynamic Columns Extension -->
+    <div class="section">
+        <h3>🏠 Training Centers Directory</h3>
+        <form action="/admin/add-column" method="POST" style="margin-bottom:20px;">
+            <input type="text" name="columnName" class="input-box" placeholder="Enter New Column Label" required>
+            <button type="submit" class="btn">+ Add Extra Column</button>
+        </form>
+        <table>
+            <thead>
+                <tr>
+                    <th>S.No</th><th>DDO Code</th><th>Name of Center</th><th>Status</th><th>Type</th><th>DDO Name</th>
+                    ${dynamicCols.map(col => `<th>${col.replace(/_/g, ' ')}</th>`).join('')}
+                </tr>
+            </thead>
+            <tbody>
+                ${centers.map(c => `
+                    <tr>
+                        <td>${c.s_no || '-'}</td>
+                        <td><code>${c.ddo_code}</code></td>
+                        <td><strong>${c.name_of_center}</strong></td>
+                        <td>${c.status}</td>
+                        <td>${c.type}</td>
+                        <td>${c.ddo_name}</td>
+                        ${dynamicCols.map(col => `<td>${c.dynamic_columns[col] || '-'}</td>`).join('')}
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    </div>
 
-    await pool.query(`
-      INSERT INTO trainees (trainee_id, full_name, cnic, mobile_number, center_id, course_name, district, tehsil, union_council, vendor_number, bank_account_number, easypaisa_number) 
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
-      [specialTraineeId, full_name, cnic, mobile_number, center_id ? parseInt(center_id) : null, course_name, district, tehsil, union_council, vendor_number, bank_account_number, easypaisa_number]
-    );
-    res.send(`<h2>Submission successful! Your Trainee ID is: <mark>${specialTraineeId}</mark></h2><p><a href="/">Go Back</a></p>`);
-  } catch (err) {
-    res.status(500).send("Database submission failure: " + err.message);
-  }
-});
+    <!-- Section 2: Create Safe Multi-User Accounts for DDOs -->
+    <div class="section">
+        <h3>🔐 Generate DDO User Workspace Access</h3>
+        <form action="/admin/create-ddo" method="POST">
+            <input type="text" name="username" class="input-box" placeholder="Assign Username" required>
+            <input type="password" name="password" class="input-box" placeholder="Assign Secure Password" required>
+            <select name="center_id" class="input-box" required>
+                <option value="">Select Center Scope Binding</option>
+                ${centers.map(c => `<option value="${c.id}">${c.name_of_center}</option>`).join('')}
+            </select>
+            <button type="submit" class="btn">Create User Account</button>
+        </form>
+    </div>
 
-// --- AUTH SYSTEM ---
-app.post('/auth/login', async (req, res) => {
-  const { username, password } = req.body;
-  try {
-    const userResult = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
-    if (!userResult || !userResult.rows || userResult.rows.length === 0) {
-      return res.status(401).send('Invalid credential parameters matching terminal.');
-    }
-    const user = userResult.rows[0];
-    if (user.password_hash !== password) return res.status(401).send('Invalid credential configurations.');
-
-    const token = jwt.sign({ id: user.id, username: user.username, role: user.role, center_id: user.center_id }, JWT_SECRET, { expiresIn: '2h' });
-    res.cookie('portal_token', token, { httpOnly: true, secure: true });
-
-    if (user.role === 'Admin') return res.redirect('/admin/dashboard');
-    if (user.role === 'DDO') return res.redirect('/ddo/dashboard');
-  } catch (err) {
-    res.status(500).send('Login Error: ' + err.message);
-  }
-});
-
-const verifyAccess = (role) => {
-  return (req, res, next) => {
-    const token = req.cookies.portal_token;
-    if (!token) return res.status(403).send('Access Denied.');
-    try {
-      const verified = jwt.verify(token, JWT_SECRET);
-      req.user = verified;
-      if (role && req.user.role !== role) return res.status(403).send('Unauthorized.');
-      next();
-    } catch (err) { return res.status(400).send('Session expired.'); }
-  };
-};
-
-app.get('/auth/logout', (req, res) => {
-  res.clearCookie('portal_token');
-  res.redirect('/');
-});
-
-app.listen(PORT, () => console.log(`Active server cluster monitoring on port ${PORT}`));
-module.exports = app;
+    <!-- Section 3: Trainees Log Registry containing Geographic & Financial Fields -->
+    <div class="section">
+        <h3>👥 Registered Trainees Ledger Profile</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Trainee ID</th><th>Name</th><th>CNIC</th><th>Course</th>
+                    <th>Geographic Core</th><th>Financial Indicators</th><th>State</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${trainees.map(t => `
+                    <tr>
+                        <td><code>${t.trainee_id}</code></td>
+                        <td><strong>${t.full_name}</strong></td>
+                        <td>${t.cnic}</td>
+                        <td>${t.course_name}</td>
+                        <td>Dist: ${t.district}<br>Tehsil: ${t.tehsil}</td>
+                        <td>Vendor: ${t.vendor_number || '-'}<br>Acc: ${t.bank_account_number || '-'}<br>EasyPaisa: ${t.easypaisa_number || '-'}</td>
+                        <td><mark>${t.status}</mark></td>
+                    </tr>
+                `).join('')}
+            </tbody>
