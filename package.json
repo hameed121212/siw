@@ -1,7 +1,7 @@
 {
   "name": "siw-balochistan-portal",
   "version": "1.0.0",
-  "description": "Government of Balochistan Directorate Portal System",
+  "description": "Small Industries Wing Balochistan Management System Portal",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
@@ -9,6 +9,7 @@
   "dependencies": {
     "express": "^4.19.2",
     "pg": "^8.11.5",
+    "ejs": "^3.1.10",
     "jsonwebtoken": "^9.0.2",
     "cookie-parser": "^1.4.6"
   }
