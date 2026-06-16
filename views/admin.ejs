@@ -1,1 +1,134 @@
+<div style="display:flex; justify-content: space-between; align-items: center;">
+    <h2>System Administrator Command Dashboard Hub</h2>
+    <a href="/logout" style="color:red; font-weight:bold;">Terminate Session [Logout]</a>
+</div>
 
+<!-- SECTION 1: REGISTRATION TABLES -->
+<div class="tabs-section" style="margin-top: 20px;">
+    <h3>Enrolled Trainee Master Database Index</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Assigned ID</th>
+                <th>Full Name</th>
+                <th>CNIC Target</th>
+                <th>Phone Matrix</th>
+                <th>Center Name Affiliate</th>
+            </tr>
+        </thead>
+        <tbody>
+            <% trainees.forEach(t => { %>
+                <tr>
+                    <td><strong><%= t.trainee_id %></strong></td>
+                    <td><%= t.full_name %></td>
+                    <td><%= t.cnic %></td>
+                    <td><%= t.phone %></td>
+                    <td><%= t.center_name %></td>
+                </tr>
+            <% }) %>
+        </tbody>
+    </table>
+</div>
+
+<!-- SECTION 2: TRAINING CENTER ENGINE CONFIGURATION WITH DYNAMIC ALTERATION SCHEMES -->
+<div class="tabs-section" style="margin-top:30px;">
+    <h3>Training Centers Configuration Grid Matrix</h3>
+    
+    <form action="/admin/add-column" method="POST" style="display: inline-flex; gap: 10px; width: auto; align-items: center;">
+        <input type="text" name="column_name" placeholder="New Column Label Field Name" style="width: 250px;" required>
+        <button type="submit" style="width: 180px;">+ Append Table Column</button>
+    </form>
+
+    <table>
+        <thead>
+            <tr>
+                <th>S.No.</th>
+                <th>DDO Code</th>
+                <th>Name of Center</th>
+                <th>Functional / Non-Functional</th>
+                <th>Govt / Private</th>
+                <th>DDO Name</th>
+                <% if(centers.length > 0 && centers[0].extra_fields) { %>
+                    <% Object.keys(centers[0].extra_fields).forEach(field => { %>
+                        <th><%= field.toUpperCase() %></th>
+                    <% }) %>
+                <% } %>
+            </tr>
+        </thead>
+        <tbody>
+            <% centers.forEach((center, idx) => { %>
+                <tr>
+                    <td><%= idx + 1 %></td>
+                    <td><%= center.ddo_code %></td>
+                    <td><%= center.center_name %></td>
+                    <td><%= center.status %></td>
+                    <td><%= center.type %></td>
+                    <td><%= center.ddo_name %></td>
+                    <% if(center.extra_fields) { %>
+                        <% Object.keys(center.extra_fields).forEach(field => { %>
+                            <td><%= center.extra_fields[field] || 'N/A' %></td>
+                        <% }) %>
+                    <% } %>
+                </tr>
+            <% }) %>
+        </tbody>
+    </table>
+</div>
+
+<div class="grid" style="margin-top:30px;">
+    <!-- ADD TRAINING CENTER -->
+    <div class="card">
+        <h3>Deploy New Hub Center Module</h3>
+        <form action="/admin/add-center" method="POST">
+            <input type="text" name="ddo_code" placeholder="DDO Code String" required>
+            <input type="text" name="center_name" placeholder="Name of Center" required>
+            <select name="status" required>
+                <option value="Functional">Functional</option>
+                <option value="Non-Functional">Non-Functional</option>
+            </select>
+            <select name="type" required>
+                <option value="Government">Government</option>
+                <option value="Private">Private</option>
+            </select>
+            <input type="text" name="ddo_name" placeholder="Assigned Officer (DDO) Name" required>
+            <button type="submit">Publish Training Center</button>
+        </form>
+    </div>
+
+    <!-- DOCUMENT MANAGEMENT SECTION -->
+    <div class="card">
+        <h3>Secure Communications Vault</h3>
+        <form action="/admin/upload-doc" method="POST" enctype="multipart/form-data">
+            <label><strong>Dispatch Document (Directorate ➔ Training Centers)</strong></label>
+            <input type="text" name="title" placeholder="Document Subject Title Line" required>
+            <input type="file" name="document" required>
+            <button type="submit">Broadcast Document Order File</button>
+        </form>
+
+        <h4>Incoming Node Upload Dispatches (Centers ➔ Directorate)</h4>
+        <ul>
+            <% docsToDir.forEach(doc => { %>
+                <li>
+                    <a href="/uploads/<%= doc.filename %>" target="_blank"><%= doc.title %></a> 
+                    <small style="color:gray;">(Uploaded by DDO Unit: <%= doc.sender_ddo_code %>)</small>
+                </li>
+            <% }) %>
+        </ul>
+    </div>
+
+    <!-- MULTI-TENANT USER SYSTEM AUTHORIZATION -->
+    <div class="card">
+        <h3>Create Distributed User Access (DDO Scope provisioning)</h3>
+        <form action="/admin/create-ddo-user" method="POST">
+            <input type="text" name="username" placeholder="Desired Unique Username" required>
+            <input type="password" name="password" placeholder="DDO Secure Entry Password" required>
+            <select name="ddo_code" required>
+                <option value="">-- Connect to Specific Assigned Center --</option>
+                <% centers.forEach(c => { %>
+                    <option value="<%= c.ddo_code %>"><%= c.center_name %> (<%= c.ddo_code %>)</option>
+                <% }) %>
+            </select>
+            <button type="submit" style="background-color: #2b2d42;">Provision Operational Access Account</button>
+        </form>
+    </div>
+</div>
