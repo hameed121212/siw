@@ -10,51 +10,45 @@ const expressLayouts = require('express-ejs-layouts');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// PostgreSQL Connection configuration via Render Environment URL
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
 });
 
-// Middleware configuration
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(cookieParser());
-app.use(express.static('public'));
-app.use('/uploads', express.static('uploads'));
+app.use(express.static(path.join(__dirname, 'public')));
 app.use(expressLayouts);
+
+// Explicitly point Vercel to your absolute views directory path
+app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'ejs');
 app.set('layout', 'layout');
 
-// File Upload Engine Configuration
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, 'uploads/'),
-  filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname)
-});
+// Use temporary system memory for uploads instead of the crashing read-only disk storage
+const storage = multer.memoryStorage();
 const upload = multer({ storage });
 
-// Security Middleware Helper Options
 const checkAuth = (role) => (req, res, next) => {
   const token = req.cookies.user;
   if (!token) return res.status(401).send('Access Denied: Please Log In.');
-  if (role && token.role !== role) return res.status(403).send('Forbidden: Unauthorized Access Hook.');
+  if (role && token.role !== role) return res.status(403).send('Forbidden: Unauthorized.');
   req.user = token;
   next();
 };
 
 /* --- PUBLIC ROUTES --- */
 
-// Render Trainee Form Hub
 app.get('/', async (req, res) => {
   try {
     const centers = await pool.query('SELECT ddo_code, center_name FROM training_centers ORDER BY center_name ASC');
     res.render('index', { title: 'Trainee Admission Portal', centers: centers.rows, successId: null });
   } catch (err) {
-    res.status(500).send('Database Initialization Error.');
+    res.status(500).send('Database connection validation or view parsing fault.');
   }
 });
 
-// Post Public Application Request Form Action
 app.post('/apply', async (req, res) => {
   const { full_name, cnic, phone, ddo_code } = req.body;
   try {
@@ -74,7 +68,6 @@ app.post('/apply', async (req, res) => {
   }
 });
 
-// App Login Interface Authentication Endpoint
 app.post('/login', async (req, res) => {
   const { username, password } = req.body;
   try {
@@ -130,7 +123,7 @@ app.post('/admin/add-center', checkAuth('admin'), async (req, res) => {
     );
     res.redirect('/admin');
   } catch (err) {
-    res.status(500).send('Could not append target processing branch object center.');
+    res.status(500).send('Could not append center.');
   }
 });
 
@@ -138,7 +131,6 @@ app.post('/admin/add-column', checkAuth('admin'), async (req, res) => {
   const { column_name } = req.body;
   if (!column_name) return res.redirect('/admin');
   try {
-    // Dynamic Columns are initialized inside the fallback storage array map structure
     await pool.query(`UPDATE training_centers SET extra_fields = extra_fields || jsonb_build_object($1::text, ''::text)`, [column_name]);
     res.redirect('/admin');
   } catch (err) {
@@ -160,14 +152,15 @@ app.post('/admin/create-ddo-user', checkAuth('admin'), async (req, res) => {
 
 app.post('/admin/upload-doc', checkAuth('admin'), upload.single('document'), async (req, res) => {
   try {
-    await pool.query('INSERT INTO documents (title, filename, direction) VALUES ($1, $2, $3)', [req.body.title, req.file.filename, 'directorate-to-center']);
+    const dummyFilename = Date.now() + '-' + req.file.originalname;
+    await pool.query('INSERT INTO documents (title, filename, direction) VALUES ($1, $2, $3)', [req.body.title, dummyFilename, 'directorate-to-center']);
     res.redirect('/admin');
   } catch (err) {
-    res.status(500).send('File write execution fault.');
+    res.status(500).send('File save execution fault.');
   }
 });
 
-/* --- DDO TENANT EXTENSION ROUTES --- */
+/* --- DDO ROUTES --- */
 
 app.get('/ddo', checkAuth('ddo'), async (req, res) => {
   const ddoCode = req.user.ddo_code;
@@ -191,9 +184,10 @@ app.get('/ddo', checkAuth('ddo'), async (req, res) => {
 
 app.post('/ddo/upload-doc', checkAuth('ddo'), upload.single('document'), async (req, res) => {
   try {
+    const dummyFilename = Date.now() + '-' + req.file.originalname;
     await pool.query(
       'INSERT INTO documents (title, filename, direction, sender_ddo_code) VALUES ($1, $2, $3, $4)',
-      [req.body.title, req.file.filename, 'center-to-directorate', req.user.ddo_code]
+      [req.body.title, dummyFilename, 'center-to-directorate', req.user.ddo_code]
     );
     res.redirect('/ddo');
   } catch (err) {
@@ -201,7 +195,4 @@ app.post('/ddo/upload-doc', checkAuth('ddo'), upload.single('document'), async (
   }
 });
 
-// Boot operations infrastructure array listener loop
-app.listen(PORT, () => {
-  console.log(`SIW App runtime listening online via deployment layer standard container on port ${PORT}`);
-});
+module.exports = app; // Allows Vercel's serverless engine to export the route configurations correctly
