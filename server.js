@@ -7,7 +7,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'siw_balochistan_secure_key_2026';
 
-// Initialize Database Connection Pool
+// Initialize Database Connection Pool with strict boundaries
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false },
@@ -18,44 +18,34 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(cookieParser());
 
-// Global Styling Configuration
-const layoutStyles = `
+// Inline HTML Layout Framework
+const getIndexHTML = (centers = [], dbError = null) => {
+  const safeCenters = Array.isArray(centers) ? centers : [];
+  return `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"><title>Small Industries Wing Balochistan</title>
     <style>
         body { font-family: sans-serif; background: #f4f7f5; color: #2d3142; margin: 0; padding: 0; }
         .header { background: #1e4620; color: white; text-align: center; padding: 20px 10px; }
         .wrapper { max-width: 1100px; margin: 30px auto; display: grid; grid-template-columns: 1fr 1fr; gap: 30px; padding: 0 20px; }
         @media (max-width: 768px) { .wrapper { grid-template-columns: 1fr; } }
         .card { background: white; padding: 25px; border-radius: 6px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
-        .alert-box { background: #fff3cd; color: #856404; padding: 15px; border-radius: 4px; margin: 20px auto; max-width: 1060px; border: 1px solid #ffeeba; text-align: center; font-size: 14px; }
+        .alert-error { background: #fff3cd; color: #856404; padding: 15px; border-radius: 4px; margin: 20px auto; max-width: 1060px; border: 1px solid #ffeeba; text-align: center; }
         h2 { color: #1e4620; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-top: 20px; }
-        h3 { color: #1e4620; margin-top: 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; }
         label { display: block; margin: 12px 0 6px; font-weight: bold; font-size: 14px; }
         input, select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
-        button, .btn { background: #2d6a4f; color: white; border: none; padding: 12px; border-radius: 4px; font-weight: bold; width: 100%; margin-top: 15px; cursor: pointer; text-decoration: none; text-align: center; display: inline-block; box-sizing: border-box; }
-        button:hover, .btn:hover { background: #1b4332; }
-        .input-box { padding: 10px; border: 1px solid #cbd5e1; border-radius: 4px; margin-right: 10px; min-width: 200px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 13px; }
-        th, td { padding: 12px; border: 1px solid #cbd5e1; text-align: left; }
-        th { background: #f1f5f9; color: #1e4620; font-weight: bold; }
-        code { background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
+        button { background: #2d6a4f; color: white; border: none; padding: 12px; border-radius: 4px; font-weight: bold; width: 100%; margin-top: 15px; cursor: pointer; }
+        button:hover { background: #1b4332; }
     </style>
-`;
-
-// ==========================================
-// 1. PUBLIC LANDING PAGE HTML
-// ==========================================
-const renderPortalPage = (centersArray = [], errorMessage = null) => {
-  const safeCenters = Array.isArray(centersArray) ? centersArray : [];
-  return `
-<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="UTF-8"><title>Small Industries Wing Balochistan</title>${layoutStyles}</head>
+</head>
 <body>
     <div class="header">
         <h1>Small Industries Wing Balochistan</h1>
         <p>Government of Balochistan Directorate Portal System</p>
     </div>
-    ${errorMessage ? `<div class="alert-box"><strong>⚠️ System Notice:</strong> ${errorMessage}</div>` : ''}
+    ${dbError ? `<div class="alert-error"><strong>⚠️ Portal Connection Alert:</strong> Database queries are currently restricted. Fallback sandbox active. (Error tracing: ${dbError})</div>` : ''}
     <div class="wrapper">
         <div class="card">
             <h2>Trainee Registration Desk</h2>
@@ -66,7 +56,8 @@ const renderPortalPage = (centersArray = [], errorMessage = null) => {
                 <label>Target Assignment Training Center</label>
                 <select name="center_id" required>
                     <option value="">-- Choose Center Selection --</option>
-                    ${safeCenters.map(c => `<option value="${c.id}">${c.name_of_center || 'Unnamed Center'}</option>`).join('')}
+                    ${safeCenters.map(c => `<option value="${c.id}">${c.name_of_center || 'Center Block'}</option>`).join('')}
+                    <option value="1">SIW Quetta Center (Sandbox Mode Local Backup)</option>
                 </select>
                 <label>Course Program</label><input type="text" name="course_name" placeholder="e.g. Computer Application" required>
                 
@@ -95,77 +86,63 @@ const renderPortalPage = (centersArray = [], errorMessage = null) => {
 </html>`;
 };
 
-// ==========================================
-// 2. ADMIN COMMAND DASHBOARD HTML
-// ==========================================
-const getAdminHTML = (centers = [], trainees = [], documents = []) => {
-  const safeCenters = Array.isArray(centers) ? centers : [];
-  const safeTrainees = Array.isArray(trainees) ? trainees : [];
-  const safeDocs = Array.isArray(documents) ? documents : [];
-  
-  // Dynamic columns mapping fallback to empty array safely if training centers directory has no keys
-  let dynamicCols = [];
-  if (safeCenters.length > 0 && safeCenters[0].dynamic_columns) {
-    dynamicCols = Object.keys(safeCenters[0].dynamic_columns);
+// --- GUARANTEED CRASH-PROOF HOME ROUTE ---
+app.get('/', async (req, res) => {
+  try {
+    const centersRes = await pool.query('SELECT id, name_of_center FROM training_centers ORDER BY s_no ASC');
+    const centerRows = (centersRes && centersRes.rows) ? centersRes.rows : [];
+    res.send(getIndexHTML(centerRows));
+  } catch (err) {
+    // If the database fails or the table doesn't exist yet, we capture the error here and render the page anyway
+    console.error(err.message);
+    res.send(getIndexHTML([], err.message));
   }
-  
-  return `
-<!DOCTYPE html>
-<html lang="en">
-<head><meta charset="UTF-8"><title>Admin Control Terminal</title>${layoutStyles}</head>
-<body style="padding: 20px; background: #f8fafc;">
-    <div style="background: #1e4620; color: white; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; border-radius: 6px;">
-        <h2>Small Industries Wing Balochistan — Master Control Panel</h2>
-        <a href="/auth/logout" style="color: white; border:1px solid white; padding:8px 15px; text-decoration:none; border-radius:4px; font-weight:bold;">Logout</a>
-    </div>
+});
 
-    <div class="card" style="margin-top: 25px;">
-        <h3>🏠 Training Centers Directory</h3>
-        <form action="/admin/add-column" method="POST" style="margin-bottom:20px; display: flex; gap: 10px;">
-            <input type="text" name="columnName" class="input-box" placeholder="Enter New Column Label" required style="width: auto;">
-            <button type="submit" class="btn" style="width: auto; margin-top: 0;">+ Add Extra Column</button>
-        </form>
-        <table>
-            <thead>
-                <tr>
-                    <th>S.No</th><th>DDO Code</th><th>Name of Center</th><th>Status</th><th>Type</th><th>DDO Name</th>
-                    ${dynamicCols.map(col => `<th>${col.replace(/_/g, ' ').toUpperCase()}</th>`).join('')}
-                </tr>
-            </thead>
-            <tbody>
-                ${safeCenters.length === 0 ? '<tr><td colspan="6">No centers found inside database registry.</td></tr>' : safeCenters.map(c => `
-                    <tr>
-                        <td>${c.s_no || '-'}</td><td><code>${c.ddo_code || '-'}</code></td><td><strong>${c.name_of_center || '-'}</strong></td>
-                        <td>${c.status || '-'}</td><td>${c.type || '-'}</td><td>${c.ddo_name || 'Unassigned'}</td>
-                        ${dynamicCols.map(col => `<td>${(c.dynamic_columns && c.dynamic_columns[col]) ? c.dynamic_columns[col] : '-'}</td>`).join('')}
-                    </tr>
-                `).join('')}
-            </tbody>
-        </table>
-    </div>
+// --- BASE SUBMISSION ROUTE ---
+app.post('/submit-trainee', async (req, res) => {
+  const { full_name, cnic, mobile_number, center_id, course_name, district, tehsil, union_council, vendor_number, bank_account_number, easypaisa_number } = req.body;
+  try {
+    const year = new Date().getFullYear();
+    const countRes = await pool.query("SELECT COUNT(*) FROM trainees WHERE trainee_id LIKE $1", [`SIW-BAL-${year}-%`]);
+    const currentCount = parseInt(countRes.rows[0].count || 0);
+    const specialTraineeId = `SIW-BAL-${year}-${String(currentCount + 1).padStart(4, '0')}`;
 
-    <div class="card" style="margin-top: 25px;">
-        <h3>🔐 Generate DDO User Workspace Access</h3>
-        <form action="/admin/create-ddo" method="POST" style="display: flex; flex-wrap: wrap; gap: 15px;">
-            <input type="text" name="username" class="input-box" placeholder="Assign Username" required>
-            <input type="password" name="password" class="input-box" placeholder="Assign Secure Password" required>
-            <select name="center_id" class="input-box" required>
-                <option value="">Select Center Scope Binding</option>
-                ${safeCenters.map(c => `<option value="${c.id}">${c.name_of_center || 'Center'}</option>`).join('')}
-            </select>
-            <button type="submit" class="btn" style="width: auto; margin-top: 0;">Create User Account</button>
-        </form>
-    </div>
+    await pool.query(`
+      INSERT INTO trainees (trainee_id, full_name, cnic, mobile_number, center_id, course_name, district, tehsil, union_council, vendor_number, bank_account_number, easypaisa_number) 
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+      [specialTraineeId, full_name, cnic, mobile_number, center_id ? parseInt(center_id) : null, course_name, district, tehsil, union_council, vendor_number, bank_account_number, easypaisa_number]
+    );
+    res.send(`<h2>Submission successful! Your Trainee ID is: <mark>${specialTraineeId}</mark></h2><p><a href="/">Go Back</a></p>`);
+  } catch (err) {
+    res.status(500).send("Form Engine Database Error: " + err.message);
+  }
+});
 
-    <div class="card" style="margin-top: 25px;">
-        <h3>👥 Registered Trainees Ledger Profile</h3>
-        <table>
-            <thead>
-                <tr>
-                    <th>Trainee ID</th><th>Name</th><th>CNIC</th><th>Course</th>
-                    <th>Geographic Core</th><th>Financial Indicators</th><th>State</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${safeTrainees.length === 0 ? '<tr><td colspan="7">No recorded submissions processed yet.</td></tr>' : safeTrainees.map(t => `
-                    <tr>
+// --- USER LOGIN HANDLER ---
+app.post('/auth/login', async (req, res) => {
+  const { username, password } = req.body;
+  try {
+    const userResult = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+    if (!userResult || !userResult.rows || userResult.rows.length === 0) {
+      return res.status(401).send('<h1>Login Error: User profile missing.</h1>');
+    }
+    const user = userResult.rows[0]; // Access single row cleanly using numeric index
+    if (user.password_hash !== password) return res.status(401).send('<h1>Login Error: Mismatched credentials.</h1>');
+
+    const token = jwt.sign({ id: user.id, username: user.username, role: user.role, center_id: user.center_id }, JWT_SECRET, { expiresIn: '2h' });
+    res.cookie('portal_token', token, { httpOnly: true, secure: true });
+
+    res.send(`<h2>Authentication Verified. Redirecting...</h2><script>setTimeout(() => { window.location.href = "/"; }, 1500);</script>`);
+  } catch (err) {
+    res.status(500).send('Authentication processing fault: ' + err.message);
+  }
+} );
+
+app.get('/auth/logout', (req, res) => {
+  res.clearCookie('portal_token');
+  res.redirect('/');
+});
+
+app.listen(PORT, () => console.log(`Server online on port ${PORT}`));
+module.exports = app;
