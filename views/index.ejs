@@ -1,83 +1,76 @@
-<%- include('layout', { body: `
-<main class="main-layout">
-  <!-- Trainee Registration Component -->
-  <div class="card">
-    <h2>Trainee Registration Desk</h2>
-    <p>Fill out the application parameters below to request admission verification.</p>
-    <hr>
-    <form action="/submit-trainee" method="POST">
-      <div class="form-group">
-        <label>Full Name</label>
-        <input type="text" name="full_name" placeholder="Enter Full Name" required>
-      </div>
-      <div class="form-group">
-        <label>CNIC Number</label>
-        <input type="text" name="cnic" placeholder="Format: 54400-0000000-0" required>
-      </div>
-      <div class="form-group">
-        <label>Mobile Contact Number</label>
-        <input type="text" name="mobile_number" placeholder="Enter Mobile Number" required>
-      </div>
-      <div class="form-group">
-        <label>Target Assignment Training Center</label>
-        <select name="center_id" required>
-          <option value="">-- Choose Center Selection --</option>
-          ${centers.map(c => `<option value="${c.id}">${c.name_of_center} (${c.ddo_code})</option>`).join('')}
-        </select>
-      </div>
-      <div class="form-group">
-        <label>Course Name</label>
-        <input type="text" name="course_name" placeholder="e.g., Computer Applications, Tailoring" required>
-      </div>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Small Industries Wing Balochistan</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+    <div class="header-banner">
+        <h1>Small Industries Wing Balochistan</h1>
+        <p>Government of Balochistan Directorate Portal System</p>
+    </div>
 
-      <h3 style="margin-top: 25px; border-bottom: 1px solid #ddd; padding-bottom: 5px;">🌍 Geographical Information</h3>
-      <div class="form-group">
-        <label>District</label>
-        <input type="text" name="district" placeholder="e.g., Quetta, Mastung, Gwadar" required>
-      </div>
-      <div class="form-group">
-        <label>Tehsil</label>
-        <input type="text" name="tehsil" placeholder="Enter Tehsil" required>
-      </div>
-      <div class="form-group">
-        <label>Union Council (UC)</label>
-        <input type="text" name="union_council" placeholder="Enter Union Council Name">
-      </div>
+    <div class="portal-grid">
+        <!-- REGISTRATION DESK FORM -->
+        <div class="panel-box">
+            <h2>Trainee Registration Desk</h2>
+            <form action="/submit-trainee" method="POST">
+                <div class="form-group">
+                    <label>Full Name</label>
+                    <input type="text" name="full_name" placeholder="Enter Full Name" required>
+                </div>
+                <div class="form-group">
+                    <label>CNIC Number</label>
+                    <input type="text" name="cnic" placeholder="Format: 54400-0000000-0" required>
+                </div>
+                <div class="form-group">
+                    <label>Mobile Contact Number</label>
+                    <input type="text" name="mobile_number" placeholder="Enter Mobile Number" required>
+                </div>
+                <div class="form-group">
+                    <label>Target Assignment Training Center</label>
+                    <select name="center_id" required>
+                        <option value="">-- Choose Center Selection --</option>
+                        <% centers.forEach(function(center) { %>
+                            <option value="<%= center.id %>"><%= center.name_of_center %></option>
+                        <% }); %>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Course Name</label>
+                    <input type="text" name="course_name" placeholder="e.g., Electronics, Tailoring" required>
+                </div>
 
-      <h3 style="margin-top: 25px; border-bottom: 1px solid #ddd; padding-bottom: 5px;">💰 Financial Information</h3>
-      <div class="form-group">
-        <label>Vendor Number (Optional)</label>
-        <input type="text" name="vendor_number" placeholder="Enter Government Vendor Code">
-      </div>
-      <div class="form-group">
-        <label>Bank Account Number (IBAN)</label>
-        <input type="text" name="bank_account_number" placeholder="PK00 BANK 0000 0000 0000">
-      </div>
-      <div class="form-group">
-        <label>EasyPaisa Number</label>
-        <input type="text" name="easypaisa_number" placeholder="e.g., 03XXXXXXXXX">
-      </div>
+                <h3>🌍 Geographical Information</h3>
+                <div class="form-group"><label>District</label><input type="text" name="district" placeholder="e.g., Quetta" required></div>
+                <div class="form-group"><label>Tehsil</label><input type="text" name="tehsil" placeholder="Enter Tehsil" required></div>
+                <div class="form-group"><label>Union Council</label><input type="text" name="union_council" placeholder="Enter UC"></div>
 
-      <button type="submit" style="margin-top:15px;">Submit Enrolment File Form</button>
-    </form>
-  </div>
+                <h3>💰 Financial Information</h3>
+                <div class="form-group"><label>Vendor Number</label><input type="text" name="vendor_number" placeholder="Enter Vendor Code"></div>
+                <div class="form-group"><label>Bank Account Number (IBAN)</label><input type="text" name="bank_account_number" placeholder="PK00BANK..."></div>
+                <div class="form-group"><label>EasyPaisa Number</label><input type="text" name="easypaisa_number" placeholder="e.g., 03001234567"></div>
 
-  <!-- Secure Login Terminal Access -->
-  <div class="card" style="height: fit-content;">
-    <h2>Secure Management Terminal Access</h2>
-    <p>Internal portal administration authorization screen.</p>
-    <hr>
-    <form action="/auth/login" method="POST">
-      <div class="form-group">
-        <label>Username / Account ID Token</label>
-        <input type="text" name="username" placeholder="Username" required>
-      </div>
-      <div class="form-group">
-        <label>Security Password String</label>
-        <input type="password" name="password" placeholder="Password" required>
-      </div>
-      <button type="submit" style="background-color: #b7094c;">Authenticate Portal Link</button>
-    </form>
-  </div>
-</main>
-` }) %>
+                <button type="submit">Submit Enrolment File Form</button>
+            </form>
+        </div>
+
+        <!-- AUTH LOGIN CONTAINER -->
+        <div class="panel-box">
+            <h2>Secure Management Terminal Access</h2>
+            <form action="/auth/login" method="POST">
+                <div class="form-group">
+                    <label>Username / Account ID Token</label>
+                    <input type="text" name="username" placeholder="Username" required>
+                </div>
+                <div class="form-group">
+                    <label>Security Password String</label>
+                    <input type="password" name="password" placeholder="Password" required>
+                </div>
+                <button type="submit" style="background-color: #b78727;">Authenticate Portal Link</button>
+            </form>
+        </div>
+    </div>
+</body>
+</html>
