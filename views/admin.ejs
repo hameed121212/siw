@@ -1,172 +1,21 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>SIW Balochistan - Admin Command Control</title>
-    <link rel="stylesheet" href="/style.css">
-    <style>
-        body { background-color: #f4f6f4; color: #111; }
-        .dashboard-container { max-width: 1300px; margin: 20px auto; background: white; padding: 25px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-        .nav-tabs { display: flex; border-bottom: 2px solid #1b4332; margin-bottom: 20px; }
-        .tab-btn { padding: 10px 20px; background: #e0e0e0; border: none; cursor: pointer; font-weight: bold; margin-right: 5px; }
-        .tab-btn.active { background: #1b4332; color: white; }
-        .tab-pane { display: none; }
-        .tab-pane.active { display: block; }
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 13px; }
-        th, td { border: 1px solid #ccc; padding: 10px; text-align: left; }
-        th { background: #eaf2ec; color: #1b4332; }
-        .doc-split { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; }
-        .doc-section { border: 1px solid #1b4332; padding: 15px; border-radius: 5px; background: #fafafa; }
-    </style>
-</head>
-<body>
-    <div class="dashboard-container">
-        <div style="display:flex; justify-content: space-between; align-items:center; border-bottom:2px solid #ccc; padding-bottom:10px;">
-            <h2>Directorate Administration Panel</h2>
-            <a href="/auth/logout" style="color:red; font-weight:bold; text-decoration:none;">Logout</a>
-        </div>
-
-        <div class="nav-tabs" style="margin-top:15px;">
-            <button class="tab-btn active" onclick="openTab(event, 'centers-view')">Training Centers</button>
-            <button class="tab-btn" onclick="openTab(event, 'trainees-view')">Trainees Record Ledger</button>
-            <button class="tab-btn" onclick="openTab(event, 'docs-view')">Documents Management Hub</button>
-            <button class="tab-btn" onclick="openTab(event, 'users-view')">Provision DDO Users</button>
-        </div>
-
-        <!-- TAB 1: TRAINING CENTERS MATRIX -->
-        <div id="centers-view" class="tab-pane active">
-            <h3>Registered Training Centers</h3>
-            <form action="/admin/add-column" method="POST" style="margin-bottom:15px; display:flex; gap:10px;">
-                <input type="text" name="columnName" placeholder="Enter new extra column name" required style="width:250px;">
-                <button type="submit" style="width:150px; padding:5px;">Add Extra Column</button>
-            </form>
-            <table>
-                <thead>
-                    <tr>
-                        <th>S.No</th><th>DDO Code</th><th>Name of Center</th><th>Status</th><th>Govt/Private</th><th>DDO Name</th>
-                        <% if(centers.length > 0 && centers[0].dynamic_columns) { %>
-                            <% Object.keys(centers[0].dynamic_columns).forEach(function(key) { %>
-                                <th><%= key %></th>
-                            <% }); %>
-                        <% } %>
-                    </tr>
-                </thead>
-                <tbody>
-                    <% centers.forEach(function(center) { %>
-                        <tr>
-                            <td><%= center.s_no %></td>
-                            <td><%= center.ddo_code %></td>
-                            <td><%= center.name_of_center %></td>
-                            <td><%= center.status %></td>
-                            <td><%= center.type %></td>
-                            <td><%= center.ddo_name %></td>
-                            <% if(center.dynamic_columns) { %>
-                                <% Object.keys(center.dynamic_columns).forEach(function(key) { %>
-                                    <td><%= center.dynamic_columns[key] || '-' %></td>
-                                <% }); %>
-                            <% } %>
-                        </tr>
-                    <% }); %>
-                </tbody>
-            </table>
-        </div>
-
-        <!-- TAB 2: TRAINEES ALL LEDGER RECORD -->
-        <div id="trainees-view" class="tab-pane">
-            <h3>All Registered Trainees</h3>
-            <table>
-                <thead>
-                    <tr>
-                        <th>Special ID</th><th>Name</th><th>CNIC</th><th>Center</th><th>Course</th><th>District</th><th>Tehsil</th><th>Vendor No</th><th>Account No</th><th>EasyPaisa</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <% trainees.forEach(function(t) { %>
-                        <tr>
-                            <td><strong><%= t.trainee_id %></strong></td>
-                            <td><%= t.full_name %></td>
-                            <td><%= t.cnic %></td>
-                            <td><%= t.name_of_center %></td>
-                            <td><%= t.course_name %></td>
-                            <td><%= t.district %></td>
-                            <td><%= t.tehsil %></td>
-                            <td><%= t.vendor_number || '-' %></td>
-                            <td><%= t.bank_account_number || '-' %></td>
-                            <td><%= t.easypaisa_number || '-' %></td>
-                        </tr>
-                    <% }); %>
-                </tbody>
-            </table>
-        </div>
-
-        <!-- TAB 3: SPLIT ACCESSIBLE DOCUMENTS MOVEMENT -->
-        <div id="docs-view" class="tab-pane">
-            <h3>Documents Dispatch Management</h3>
-            <form action="/documents/upload" method="POST" style="margin-bottom:20px; display:flex; flex-direction:column; gap:10px; border:1px dashed #ccc; padding:15px;">
-                <h4>Upload Document Mapping Reference</h4>
-                <input type="text" name="title" placeholder="Document Title / Subject" required>
-                <input type="text" name="file_url" placeholder="Paste Document Link URL" required>
-                <select name="direction" required>
-                    <option value="Directorate-to-Center">Directorate to Training Centers</option>
-                    <option value="Center-to-Directorate">Training Centers to Directorate</option>
-                </select>
-                <button type="submit" style="width:200px;">Save Dispatch Record</button>
-            </form>
-
-            <div class="doc-split">
-                <div class="doc-section">
-                    <h4>📤 Directorate to Training Centers</h4>
-                    <ul>
-                        <% documents.filter(d => d.direction === 'Directorate-to-Center').forEach(function(doc) { %>
-                            <li><a href="<%= doc.file_url %>" target="_blank"><%= doc.title %></a> <small>(Uploaded by: <%= doc.username %>)</small></li>
-                        <% }); %>
-                    </ul>
-                </div>
-                <div class="doc-section">
-                    <h4>📥 Training Centers to Directorate</h4>
-                    <ul>
-                        <% documents.filter(d => d.direction === 'Center-to-Directorate').forEach(function(doc) { %>
-                            <li><a href="<%= doc.file_url %>" target="_blank"><%= doc.title %></a> <small>(Uploaded by: <%= doc.username %>)</small></li>
-                        <% }); %>
-                    </ul>
-                </div>
-            </div>
-        </div>
-
-        <!-- TAB 4: CREATE SECURE LOCALIZED USER LOGINS FOR DDO -->
-        <div id="users-view" class="tab-pane">
-            <h3>Provision New DDO Portal Access</h3>
-            <form action="/admin/create-ddo" method="POST" style="max-width:400px; display:flex; flex-direction:column; gap:10px;">
-                <input type="text" name="username" placeholder="Enter Secure DDO Username" required>
-                <input type="password" name="password" placeholder="Enter Secure DDO Password" required>
-                <select name="center_id" required>
-                    <option value="">-- Bind to Training Center --</option>
-                    <% centers.forEach(function(c) { %>
-                        <option value="<%= c.id %>"><%= c.name_of_center %></option>
-                    <% }); %>
-                </select>
-                <button type="submit">Create User Access</button>
-            </form>
-
-            <h4 style="margin-top:20px;">Active Program Users Registered</h4>
-            <ul>
-                <% ddos.forEach(function(ddo) { %>
-                    <li>User Token: <code><%= ddo.username %></code> Assigned Center Index: <%= ddo.center_id %></li>
-                <% }); %>
-            </ul>
-        </div>
-    </div>
-
-    <script>
-        function openTab(evt, tabName) {
-            var i, tabcontent, tablinks;
-            tabcontent = document.getElementsByClassName("tab-pane");
-            for (i = 0; i < tabcontent.length; i++) { tabcontent[i].classList.remove("active"); }
-            tablinks = document.getElementsByClassName("tab-btn");
-            for (i = 0; i < tablinks.length; i++) { tablinks[i].classList.remove("active"); }
-            document.getElementById(tabName).classList.add("active");
-            evt.currentTarget.classList.add("active");
-        }
-    </script>
-</body>
-</html>
+<tbody>
+  <% if (typeof centers !== 'undefined' && Array.isArray(centers) && centers.length > 0) { %>
+    <% centers.forEach(function(center) { %>
+      <tr>
+        <td><%= center.s_no || '-' %></td>
+        <td><code><%= center.ddo_code || '-' %></code></td>
+        <td><strong><%= center.name_of_center || 'Un-named Center' %></strong></td>
+        <td><span class="badge <%= center.status || 'Functional' %>"><%= center.status || 'Functional' %></span></td>
+        <td><span class="badge <%= center.type || 'Govt' %>"><%= center.type || 'Govt' %></span></td>
+        <td><%= center.ddo_name || 'Unassigned' %></td>
+        <% if (center.dynamic_columns && typeof center.dynamic_columns === 'object') { %>
+          <% Object.keys(center.dynamic_columns).forEach(function(key) { %>
+            <td><%= center.dynamic_columns[key] || '-' %></td>
+          <% }); %>
+        <% } %>
+      </tr>
+    <% }); %>
+  <% } else { %>
+    <tr><td colspan="10" style="text-align:center; padding:20px; color:#666;">No active training centers found in repository schema.</td></tr>
+  <% } %>
+</tbody>
