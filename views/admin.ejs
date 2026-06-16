@@ -1,134 +1,317 @@
-<div style="display:flex; justify-content: space-between; align-items: center;">
-    <h2>System Administrator Command Dashboard Hub</h2>
-    <a href="/logout" style="color:red; font-weight:bold;">Terminate Session [Logout]</a>
-</div>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SIW Balochistan - Admin Terminal</title>
+    <link rel="stylesheet" href="/style.css">
+    <style>
+        :root {
+            --primary-color: #1e4620;
+            --secondary-color: #2d6a4f;
+            --accent-color: #d4a373;
+            --bg-light: #f4f7f5;
+            --text-dark: #2d3142;
+            --border-color: #d8e2dc;
+        }
 
-<!-- SECTION 1: REGISTRATION TABLES -->
-<div class="tabs-section" style="margin-top: 20px;">
-    <h3>Enrolled Trainee Master Database Index</h3>
-    <table>
-        <thead>
-            <tr>
-                <th>Assigned ID</th>
-                <th>Full Name</th>
-                <th>CNIC Target</th>
-                <th>Phone Matrix</th>
-                <th>Center Name Affiliate</th>
-            </tr>
-        </thead>
-        <tbody>
-            <% trainees.forEach(t => { %>
-                <tr>
-                    <td><strong><%= t.trainee_id %></strong></td>
-                    <td><%= t.full_name %></td>
-                    <td><%= t.cnic %></td>
-                    <td><%= t.phone %></td>
-                    <td><%= t.center_name %></td>
-                </tr>
-            <% }) %>
-        </tbody>
-    </table>
-</div>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-light);
+            color: var(--text-dark);
+        }
 
-<!-- SECTION 2: TRAINING CENTER ENGINE CONFIGURATION WITH DYNAMIC ALTERATION SCHEMES -->
-<div class="tabs-section" style="margin-top:30px;">
-    <h3>Training Centers Configuration Grid Matrix</h3>
-    
-    <form action="/admin/add-column" method="POST" style="display: inline-flex; gap: 10px; width: auto; align-items: center;">
-        <input type="text" name="column_name" placeholder="New Column Label Field Name" style="width: 250px;" required>
-        <button type="submit" style="width: 180px;">+ Append Table Column</button>
-    </form>
+        /* Top Bar Panel Styling */
+        .top-navbar {
+            background-color: var(--primary-color);
+            color: #ffffff;
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
 
-    <table>
-        <thead>
-            <tr>
-                <th>S.No.</th>
-                <th>DDO Code</th>
-                <th>Name of Center</th>
-                <th>Functional / Non-Functional</th>
-                <th>Govt / Private</th>
-                <th>DDO Name</th>
-                <% if(centers.length > 0 && centers[0].extra_fields) { %>
-                    <% Object.keys(centers[0].extra_fields).forEach(field => { %>
-                        <th><%= field.toUpperCase() %></th>
-                    <% }) %>
-                <% } %>
-            </tr>
-        </thead>
-        <tbody>
-            <% centers.forEach((center, idx) => { %>
-                <tr>
-                    <td><%= idx + 1 %></td>
-                    <td><%= center.ddo_code %></td>
-                    <td><%= center.center_name %></td>
-                    <td><%= center.status %></td>
-                    <td><%= center.type %></td>
-                    <td><%= center.ddo_name %></td>
-                    <% if(center.extra_fields) { %>
-                        <% Object.keys(center.extra_fields).forEach(field => { %>
-                            <td><%= center.extra_fields[field] || 'N/A' %></td>
-                        <% }) %>
-                    <% } %>
-                </tr>
-            <% }) %>
-        </tbody>
-    </table>
-</div>
+        .top-navbar h1 {
+            margin: 0;
+            font-size: 22px;
+            font-weight: 600;
+        }
 
-<div class="grid" style="margin-top:30px;">
-    <!-- ADD TRAINING CENTER -->
-    <div class="card">
-        <h3>Deploy New Hub Center Module</h3>
-        <form action="/admin/add-center" method="POST">
-            <input type="text" name="ddo_code" placeholder="DDO Code String" required>
-            <input type="text" name="center_name" placeholder="Name of Center" required>
-            <select name="status" required>
-                <option value="Functional">Functional</option>
-                <option value="Non-Functional">Non-Functional</option>
-            </select>
-            <select name="type" required>
-                <option value="Government">Government</option>
-                <option value="Private">Private</option>
-            </select>
-            <input type="text" name="ddo_name" placeholder="Assigned Officer (DDO) Name" required>
-            <button type="submit">Publish Training Center</button>
-        </form>
-    </div>
+        .logout-btn {
+            background-color: transparent;
+            color: #ffffff;
+            border: 2px solid #ffffff;
+            padding: 8px 16px;
+            border-radius: 4px;
+            text-decoration: none;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
 
-    <!-- DOCUMENT MANAGEMENT SECTION -->
-    <div class="card">
-        <h3>Secure Communications Vault</h3>
-        <form action="/admin/upload-doc" method="POST" enctype="multipart/form-data">
-            <label><strong>Dispatch Document (Directorate ➔ Training Centers)</strong></label>
-            <input type="text" name="title" placeholder="Document Subject Title Line" required>
-            <input type="file" name="document" required>
-            <button type="submit">Broadcast Document Order File</button>
-        </form>
+        .logout-btn:hover {
+            background-color: #ffffff;
+            color: var(--primary-color);
+        }
 
-        <h4>Incoming Node Upload Dispatches (Centers ➔ Directorate)</h4>
-        <ul>
-            <% docsToDir.forEach(doc => { %>
-                <li>
-                    <a href="/uploads/<%= doc.filename %>" target="_blank"><%= doc.title %></a> 
-                    <small style="color:gray;">(Uploaded by DDO Unit: <%= doc.sender_ddo_code %>)</small>
-                </li>
-            <% }) %>
-        </ul>
-    </div>
+        .main-container {
+            max-width: 1400px;
+            margin: 30px auto;
+            padding: 0 20px;
+        }
 
-    <!-- MULTI-TENANT USER SYSTEM AUTHORIZATION -->
-    <div class="card">
-        <h3>Create Distributed User Access (DDO Scope provisioning)</h3>
-        <form action="/admin/create-ddo-user" method="POST">
-            <input type="text" name="username" placeholder="Desired Unique Username" required>
-            <input type="password" name="password" placeholder="DDO Secure Entry Password" required>
-            <select name="ddo_code" required>
-                <option value="">-- Connect to Specific Assigned Center --</option>
-                <% centers.forEach(c => { %>
-                    <option value="<%= c.ddo_code %>"><%= c.center_name %> (<%= c.ddo_code %>)</option>
-                <% }) %>
-            </select>
-            <button type="submit" style="background-color: #2b2d42;">Provision Operational Access Account</button>
-        </form>
-    </div>
-</div>
+        /* System Action Tabs */
+        .tab-menu {
+            display: flex;
+            border-bottom: 3px solid var(--primary-color);
+            margin-bottom: 25px;
+            gap: 5px;
+        }
+
+        .tab-link {
+            background-color: #e9ecef;
+            border: none;
+            outline: none;
+            padding: 12px 24px;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 600;
+            color: #495057;
+            border-top-left-radius: 6px;
+            border-top-right-radius: 6px;
+            transition: all 0.2s ease;
+        }
+
+        .tab-link.active {
+            background-color: var(--primary-color);
+            color: #ffffff;
+        }
+
+        .tab-content {
+            display: none;
+            background: #ffffff;
+            padding: 25px;
+            border-radius: 0 0 6px 6px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* Form Layouts & Elements */
+        .panel-form {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+            margin-bottom: 25px;
+        }
+
+        .form-row {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+
+        .form-group {
+            flex: 1;
+            min-width: 200px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .form-group label {
+            margin-bottom: 6px;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .form-group input, .form-group select {
+            padding: 10px;
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .action-btn {
+            background-color: var(--secondary-color);
+            color: white;
+            border: none;
+            padding: 11px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            align-self: flex-end;
+            transition: background 0.2s ease;
+        }
+
+        .action-btn:hover {
+            background-color: #1b4332;
+        }
+
+        /* Registry Table Framework */
+        .table-responsive {
+            overflow-x: auto;
+            margin-top: 15px;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            font-size: 14px;
+        }
+
+        .data-table th, .data-table td {
+            padding: 12px 15px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .data-table th {
+            background-color: #f1f5f2;
+            color: var(--primary-color);
+            font-weight: 700;
+            text-transform: uppercase;
+            font-size: 12px;
+            letter-spacing: 0.5px;
+        }
+
+        .data-table tr:hover {
+            background-color: #f8f9fa;
+        }
+
+        .badge {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .badge.Functional { background-color: #d8f3dc; color: #1b4332; }
+        .badge.Non-Functional { background-color: #fcd5ce; color: #842029; }
+        .badge.Govt { background-color: #e0f2fe; color: #0369a1; }
+        .badge.Private { background-color: #fef3c7; color: #b45309; }
+
+        /* Documents Communication Hub Layout */
+        .document-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+        }
+
+        @media (max-width: 900px) {
+            .document-grid { grid-template-columns: 1fr; }
+        }
+
+        .doc-card {
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 20px;
+        }
+
+        .doc-card h3 {
+            margin-top: 0;
+            color: var(--primary-color);
+            border-bottom: 2px solid var(--border-color);
+            padding-bottom: 10px;
+        }
+
+        .doc-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .doc-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px dashed var(--border-color);
+        }
+
+        .doc-link {
+            color: var(--secondary-color);
+            text-decoration: none;
+            font-weight: 600;
+        }
+
+        .doc-link:hover {
+            text-decoration: underline;
+        }
+
+        .doc-meta {
+            font-size: 12px;
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Admin Navigation Header -->
+    <header class="top-navbar">
+        <h1>Small Industries Wing Balochistan — Admin Command Terminal</h1>
+        <a href="/auth/logout" class="logout-btn">Secure Terminal Exit</a>
+    </header>
+
+    <div class="main-container">
+
+        <!-- Functional Dashboard Tab Structure -->
+        <nav class="tab-menu">
+            <button class="tab-link active" onclick="switchTab(event, 'centers-tab')">🏠 Training Centers</button>
+            <button class="tab-link" onclick="switchTab(event, 'trainees-tab')">👥 Enrolled Trainees Registry</button>
+            <button class="tab-link" onclick="switchTab(event, 'documents-tab')">📁 Communication Documents</button>
+            <button class="tab-link" onclick="switchTab(event, 'users-tab')">🔐 DDO Access Control</button>
+        </nav>
+
+        <!-- TAB 1: TRAINING CENTERS DATA PLATFORM -->
+        <section id="centers-tab" class="tab-content active">
+            <h2>Training Centers Directory</h2>
+            
+            <!-- Dynamic Column Extension Interface -->
+            <form action="/admin/add-column" method="POST" class="panel-form">
+                <h4>Injected Fields Engine</h4>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="columnName">Add Custom Table Column (On-The-Fly)</label>
+                        <input type="text" id="columnName" name="columnName" placeholder="e.g., District_Office, Contact_No" required>
+                    </div>
+                    <button type="submit" class="action-btn">Alter Table Schema</button>
+                </div>
+            </form>
+
+            <div class="table-responsive">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>S.No</th>
+                            <th>DDO Code</th>
+                            <th>Name of Center</th>
+                            <th>Status Matrix</th>
+                            <th>Govt/Private</th>
+                            <th>DDO Assignee Name</th>
+                            <!-- Loop over admin generated custom schema keys -->
+                            <% if (centers.length > 0 && centers[0].dynamic_columns) { %>
+                                <% Object.keys(centers[0].dynamic_columns).forEach(function(key) { %>
+                                    <th><%= key.replace(/_/g, ' ') %></th>
+                                <% }); %>
+                            <% } %>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% centers.forEach(function(center) { %>
+                            <tr>
+                                <td><%= center.s_no %></td>
+                                <td><code><%= center.ddo_code %></code></td>
+                                <td><strong><%= center.name_of_center %></strong></td>
+                                <td><span class="badge <%= center.status %>"><%= center.status %></span></td>
+                                <td><span class="badge <%= center.type %>"><%= center.type %></span></td>
+                                <td><%= center.ddo_name || 'Unassigned' %></td>
+                                <!-- Fetch matching values corresponding to custom injected keys -->
+                                <% if (center.dynamic_columns) { %>
