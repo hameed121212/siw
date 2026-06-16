@@ -7,45 +7,54 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'siw_balochistan_secure_key_2026';
 
-// Initialize Database Connection Pool
+// 1. Initialize Database Connection with strict connection timeout boundary limits
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
+  ssl: { rejectUnauthorized: false },
+  connectionTimeoutMillis: 5000 // Force termination after 5 seconds if database stalls
 });
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(cookieParser());
 
-// ==========================================
-// 1. PUBLIC LANDING PAGE HTML TEMPLATE
-// ==========================================
-const getIndexHTML = (centers, dbError = null) => {
-  const safeCenters = Array.isArray(centers) ? centers : [];
-  return `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8"><title>Small Industries Wing Balochistan</title>
+// Base UI Styling Framework Mapping
+const layoutStyles = `
     <style>
         body { font-family: sans-serif; background: #f4f7f5; color: #2d3142; margin: 0; padding: 0; }
         .header { background: #1e4620; color: white; text-align: center; padding: 20px 10px; }
         .wrapper { max-width: 1100px; margin: 30px auto; display: grid; grid-template-columns: 1fr 1fr; gap: 30px; padding: 0 20px; }
+        @media (max-width: 768px) { .wrapper { grid-template-columns: 1fr; } }
         .card { background: white; padding: 25px; border-radius: 6px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
-        .alert-error { background: #f8d7da; color: #721c24; padding: 15px; border-radius: 4px; margin: 20px auto; max-width: 1060px; border: 1px solid #f5c6cb; text-align: center; }
+        .alert-box { background: #fff3cd; color: #856404; padding: 15px; border-radius: 4px; margin: 20px auto; max-width: 1060px; border: 1px solid #ffeeba; text-align: center; font-size: 14px; line-height: 1.5; }
         h2 { color: #1e4620; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px; margin-top: 20px; }
         label { display: block; margin: 12px 0 6px; font-weight: bold; font-size: 14px; }
         input, select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
         button { background: #2d6a4f; color: white; border: none; padding: 12px; border-radius: 4px; font-weight: bold; width: 100%; margin-top: 15px; cursor: pointer; }
         button:hover { background: #1b4332; }
     </style>
-</head>
+`;
+
+// ==========================================
+// PUBLIC PORTAL RENDER ENGINE
+// ==========================================
+const renderPortalPage = (centersArray = [], errorMessage = null) => {
+  return `
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Small Industries Wing Balochistan</title>${layoutStyles}</head>
 <body>
     <div class="header">
         <h1>Small Industries Wing Balochistan</h1>
         <p>Government of Balochistan Directorate Portal System</p>
     </div>
-    ${dbError ? `<div class="alert-error"><strong>Database Status:</strong> Working Offline (Tables pending initialization). Connection message: ${dbError}</div>` : ''}
+
+    ${errorMessage ? `
+    <div class="alert-box">
+        <strong>⚠️ System Offline Configuration Notice:</strong> ${errorMessage}<br>
+        <span style="font-size:12px; color:#666;">The portal is running under a protected local sandbox state. To switch the database online, add a valid <code>DATABASE_URL</code> variable to your Vercel Project Environment parameters.</span>
+    </div>` : ''}
+
     <div class="wrapper">
         <div class="card">
             <h2>Trainee Registration Desk</h2>
@@ -53,11 +62,14 @@ const getIndexHTML = (centers, dbError = null) => {
                 <label>Full Name</label><input type="text" name="full_name" placeholder="Enter Full Name" required>
                 <label>CNIC Number</label><input type="text" name="cnic" placeholder="Format: 54400-0000000-0" required>
                 <label>Mobile Contact Number</label><input type="text" name="mobile_number" placeholder="Enter Mobile Number" required>
+                
                 <label>Target Assignment Training Center</label>
                 <select name="center_id" required>
                     <option value="">-- Choose Center Selection --</option>
-                    ${safeCenters.map(c => `<option value="${c.id}">${c.name_of_center || 'Center'}</option>`).join('')}
+                    ${centersArray.map(c => `<option value="${c.id}">${c.name_of_center || 'Center'}</option>`).join('')}
+                    <option value="1">SIW Technical Training Center Quetta (Local Fallback)</option>
                 </select>
+                
                 <label>Course Program</label><input type="text" name="course_name" placeholder="e.g. Computer Application" required>
                 
                 <h2>🌍 Geographical Information</h2>
@@ -85,96 +97,79 @@ const getIndexHTML = (centers, dbError = null) => {
 </html>`;
 };
 
-// ==========================================
-// 2. ADMIN COMMAND DASHBOARD HTML TEMPLATE
-// ==========================================
-const getAdminHTML = (centers, trainees, documents) => {
-  const safeCenters = Array.isArray(centers) ? centers : [];
-  const safeTrainees = Array.isArray(trainees) ? trainees : [];
-  const safeDocs = Array.isArray(documents) ? documents : [];
+// --- CORE SAFE LANDING ROUTE ---
+app.get('/', async (req, res) => {
+  // If the variable string isn't populated on Vercel, immediately render the offline fallback view without attempting a database connection
+  if (!process.env.DATABASE_URL) {
+    return res.send(renderPortalPage([], "Missing DATABASE_URL string environmental token inside Vercel Dashboard parameters."));
+  }
+
+  try {
+    const centersRes = await pool.query('SELECT id, name_of_center FROM training_centers ORDER BY s_no ASC');
+    const rows = (centersRes && centersRes.rows) ? centersRes.rows : [];
+    res.send(renderPortalPage(rows));
+  } catch (err) {
+    // Intercept any unhandled query errors gracefully instead of allowing the serverless container to crash
+    res.send(renderPortalPage([], `Database Connection Refused: ${err.message}`));
+  }
+});
+
+// --- SUBMISSION ENDPOINT ---
+app.post('/submit-trainee', async (req, res) => {
+  const { full_name, cnic, mobile_number, center_id, course_name, district, tehsil, union_council, vendor_number, bank_account_number, easypaisa_number } = req.body;
   
-  return `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8"><title>Admin Control Terminal</title>
-    <style>
-        body { font-family: sans-serif; background: #f8fafc; margin: 0; padding: 20px; color: #334155; }
-        .nav { background: #1e4620; color: white; padding: 15px 25px; display: flex; justify-content: space-between; align-items: center; border-radius: 6px; }
-        .section { background: white; padding: 25px; margin-top: 25px; border-radius: 6px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
-        h3 { color: #1e4620; margin-top: 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 13px; }
-        th, td { padding: 12px; border: 1px solid #cbd5e1; text-align: left; }
-        th { background: #f1f5f9; color: #1e4620; font-weight: bold; }
-        .btn { background: #2d6a4f; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; font-weight: bold; }
-        .btn:hover { background: #1b4332; }
-        .input-box { padding: 10px; border: 1px solid #cbd5e1; border-radius: 4px; margin-right: 10px; min-width: 200px; }
-        .doc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 25px; }
-        code { background: #f1f5f9; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
-    </style>
-</head>
-<body>
-    <div class="nav">
-        <h2>Small Industries Wing Balochistan — Master Control Panel</h2>
-        <a href="/auth/logout" style="color: white; border:1px solid white; padding:8px 15px; text-decoration:none; border-radius:4px; font-weight:bold;">Logout</a>
-    </div>
+  if (!process.env.DATABASE_URL) {
+    return res.status(503).send("<h2>Database offline. Submission could not be completed.</h2><p><a href='/'>Go Back</a></p>");
+  }
 
-    <div class="section">
-        <h3>🏠 Training Centers Directory</h3>
-        <form action="/admin/add-column" method="POST" style="margin-bottom:20px;">
-            <input type="text" name="columnName" class="input-box" placeholder="Enter New Column Label" required>
-            <button type="submit" class="btn">+ Add Extra Column</button>
-        </form>
-        <table>
-            <thead>
-                <tr><th>S.No</th><th>DDO Code</th><th>Name of Center</th><th>Status</th><th>Type</th><th>DDO Name</th></tr>
-            </thead>
-            <tbody>
-                ${safeCenters.map(c => `
-                    <tr>
-                        <td>${c.s_no || '-'}</td><td><code>${c.ddo_code || '-'}</code></td>
-                        <td><strong>${c.name_of_center || '-'}</strong></td><td>${c.status || '-'}</td>
-                        <td>${c.type || '-'}</td><td>${c.ddo_name || 'Unassigned'}</td>
-                    </tr>
-                `).join('')}
-            </tbody>
-        </table>
-    </div>
+  try {
+    const year = new Date().getFullYear();
+    const countRes = await pool.query("SELECT COUNT(*) FROM trainees WHERE trainee_id LIKE $1", [`SIW-BAL-${year}-%`]);
+    const currentCount = (countRes && countRes.rows && countRes.rows[0]) ? parseInt(countRes.rows[0].count || 0) : 0;
+    const nextSequence = String(currentCount + 1).padStart(4, '0');
+    const specialTraineeId = `SIW-BAL-${year}-${nextSequence}`;
 
-    <div class="section">
-        <h3>🔐 Generate DDO User Workspace Access</h3>
-        <form action="/admin/create-ddo" method="POST">
-            <input type="text" name="username" class="input-box" placeholder="Assign Username" required>
-            <input type="password" name="password" class="input-box" placeholder="Assign Secure Password" required>
-            <select name="center_id" class="input-box" required>
-                <option value="">Select Center Scope Binding</option>
-                ${safeCenters.map(c => `<option value="${c.id}">${c.name_of_center}</option>`).join('')}
-            </select>
-            <button type="submit" class="btn">Create User Account</button>
-        </form>
-    </div>
+    await pool.query(`
+      INSERT INTO trainees (trainee_id, full_name, cnic, mobile_number, center_id, course_name, district, tehsil, union_council, vendor_number, bank_account_number, easypaisa_number) 
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+      [specialTraineeId, full_name, cnic, mobile_number, center_id ? parseInt(center_id) : null, course_name, district, tehsil, union_council, vendor_number, bank_account_number, easypaisa_number]
+    );
+    res.send(`<h2>Submission successful! Your Trainee ID is: <mark>${specialTraineeId}</mark></h2><p><a href="/">Return To Desk</a></p>`);
+  } catch (err) {
+    res.status(500).send("Database operation execution failure: " + err.message);
+  }
+});
 
-    <div class="section">
-        <h3>👥 Registered Trainees Ledger Profile</h3>
-        <table>
-            <thead>
-                <tr><th>Trainee ID</th><th>Name</th><th>CNIC</th><th>Course</th><th>Geographic Core</th><th>Financial Indicators</th><th>State</th></tr>
-            </thead>
-            <tbody>
-                ${safeTrainees.map(t => `
-                    <tr>
-                        <td><code>${t.trainee_id || '-'}</code></td><td><strong>${t.full_name || '-'}</strong></td><td>${t.cnic || '-'}</td><td>${t.course_name || '-'}</td>
-                        <td>Dist: ${t.district || '-'}<br>Tehsil: ${t.tehsil || '-'}</td>
-                        <td>Vendor: ${t.vendor_number || '-'}<br>Acc: ${t.bank_account_number || '-'}<br>EasyPaisa: ${t.easypaisa_number || '-'}</td>
-                        <td><mark>${t.status || 'Pending'}</mark></td>
-                    </tr>
-                `).join('')}
-            </tbody>
-        </table>
-    </div>
+// --- LOGIN ROUTE ---
+app.post('/auth/login', async (req, res) => {
+  const { username, password } = req.body;
+  if (!process.env.DATABASE_URL) {
+    return res.status(503).send("Authentication service offline.");
+  }
 
-    <div class="doc-grid">
-        <div class="section">
-            <h3>📤 From Directorate to Training Centers</h3>
-            <form action="/admin/upload-document" method="POST" style="margin-bottom:15px;">
-                <input type="text" name="title" class="input-box" placeholder="Document Title" required><br><br>
+  try {
+    const userResult = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+    if (!userResult || !userResult.rows || userResult.rows.length === 0) {
+      return res.status(401).send('<h1>Authentication Notice: User account record row not found.</h1>');
+    }
+    
+    const user = userResult.rows[0]; 
+    if (user.password_hash !== password) return res.status(401).send('<h1>Authentication Notice: Invalid credential match configurations.</h1>');
+
+    const token = jwt.sign({ id: user.id, username: user.username, role: user.role, center_id: user.center_id }, JWT_SECRET, { expiresIn: '2h' });
+    res.cookie('portal_token', token, { httpOnly: true, secure: true });
+
+    if (user.role === 'Admin') return res.redirect('/admin/dashboard');
+    return res.redirect('/');
+  } catch (err) {
+    res.status(500).send('Login Process Exception: ' + err.message);
+  }
+});
+
+app.get('/auth/logout', (req, res) => {
+  res.clearCookie('portal_token');
+  res.redirect('/');
+});
+
+app.listen(PORT, () => console.log(`Active server execution initialized on port ${PORT}`));
+module.exports = app;
