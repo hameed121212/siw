@@ -45,7 +45,7 @@ const getIndexHTML = (centers, dbError = null) => {
         <h1>Small Industries Wing Balochistan</h1>
         <p>Government of Balochistan Directorate Portal System</p>
     </div>
-    ${dbError ? `<div class="alert-error"><strong>Database Error:</strong> ${dbError}</div>` : ''}
+    ${dbError ? `<div class="alert-error"><strong>Database Connection Wait Check:</strong> ${dbError}</div>` : ''}
     <div class="wrapper">
         <div class="card">
             <h2>Trainee Registration Desk</h2>
