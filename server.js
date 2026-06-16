@@ -18,7 +18,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(cookieParser());
 
-// Global Styling Reset
+// Global Styling Configuration
 const layoutStyles = `
     <style>
         body { font-family: sans-serif; background: #f4f7f5; color: #2d3142; margin: 0; padding: 0; }
@@ -31,7 +31,7 @@ const layoutStyles = `
         h3 { color: #1e4620; margin-top: 0; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; }
         label { display: block; margin: 12px 0 6px; font-weight: bold; font-size: 14px; }
         input, select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
-        button, .btn { background: #2d6a4f; color: white; border: none; padding: 12px; border-radius: 4px; font-weight: bold; width: 100%; margin-top: 15px; cursor: pointer; text-decoration: none; text-align: center; display: inline-block; }
+        button, .btn { background: #2d6a4f; color: white; border: none; padding: 12px; border-radius: 4px; font-weight: bold; width: 100%; margin-top: 15px; cursor: pointer; text-decoration: none; text-align: center; display: inline-block; box-sizing: border-box; }
         button:hover, .btn:hover { background: #1b4332; }
         .input-box { padding: 10px; border: 1px solid #cbd5e1; border-radius: 4px; margin-right: 10px; min-width: 200px; }
         table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 13px; }
@@ -42,7 +42,7 @@ const layoutStyles = `
 `;
 
 // ==========================================
-// 1. PUBLIC PORTAL PAGE HTML
+// 1. PUBLIC LANDING PAGE HTML
 // ==========================================
 const renderPortalPage = (centersArray = [], errorMessage = null) => {
   const safeCenters = Array.isArray(centersArray) ? centersArray : [];
@@ -66,7 +66,7 @@ const renderPortalPage = (centersArray = [], errorMessage = null) => {
                 <label>Target Assignment Training Center</label>
                 <select name="center_id" required>
                     <option value="">-- Choose Center Selection --</option>
-                    ${safeCenters.map(c => `<option value="${c.id}">${c.name_of_center}</option>`).join('')}
+                    ${safeCenters.map(c => `<option value="${c.id}">${c.name_of_center || 'Unnamed Center'}</option>`).join('')}
                 </select>
                 <label>Course Program</label><input type="text" name="course_name" placeholder="e.g. Computer Application" required>
                 
@@ -103,7 +103,11 @@ const getAdminHTML = (centers = [], trainees = [], documents = []) => {
   const safeTrainees = Array.isArray(trainees) ? trainees : [];
   const safeDocs = Array.isArray(documents) ? documents : [];
   
-  const dynamicCols = (safeCenters.length > 0 && safeCenters[0].dynamic_columns) ? Object.keys(safeCenters[0].dynamic_columns) : [];
+  // Dynamic columns mapping fallback to empty array safely if training centers directory has no keys
+  let dynamicCols = [];
+  if (safeCenters.length > 0 && safeCenters[0].dynamic_columns) {
+    dynamicCols = Object.keys(safeCenters[0].dynamic_columns);
+  }
   
   return `
 <!DOCTYPE html>
@@ -125,14 +129,14 @@ const getAdminHTML = (centers = [], trainees = [], documents = []) => {
             <thead>
                 <tr>
                     <th>S.No</th><th>DDO Code</th><th>Name of Center</th><th>Status</th><th>Type</th><th>DDO Name</th>
-                    ${dynamicCols.map(col => `<th>${col.replace(/_/g, ' ')}</th>`).join('')}
+                    ${dynamicCols.map(col => `<th>${col.replace(/_/g, ' ').toUpperCase()}</th>`).join('')}
                 </tr>
             </thead>
             <tbody>
-                ${safeCenters.map(c => `
+                ${safeCenters.length === 0 ? '<tr><td colspan="6">No centers found inside database registry.</td></tr>' : safeCenters.map(c => `
                     <tr>
-                        <td>${c.s_no || '-'}</td><td><code>${c.ddo_code}</code></td><td><strong>${c.name_of_center}</strong></td>
-                        <td>${c.status}</td><td>${c.type}</td><td>${c.ddo_name}</td>
+                        <td>${c.s_no || '-'}</td><td><code>${c.ddo_code || '-'}</code></td><td><strong>${c.name_of_center || '-'}</strong></td>
+                        <td>${c.status || '-'}</td><td>${c.type || '-'}</td><td>${c.ddo_name || 'Unassigned'}</td>
                         ${dynamicCols.map(col => `<td>${(c.dynamic_columns && c.dynamic_columns[col]) ? c.dynamic_columns[col] : '-'}</td>`).join('')}
                     </tr>
                 `).join('')}
@@ -147,7 +151,7 @@ const getAdminHTML = (centers = [], trainees = [], documents = []) => {
             <input type="password" name="password" class="input-box" placeholder="Assign Secure Password" required>
             <select name="center_id" class="input-box" required>
                 <option value="">Select Center Scope Binding</option>
-                ${safeCenters.map(c => `<option value="${c.id}">${c.name_of_center}</option>`).join('')}
+                ${safeCenters.map(c => `<option value="${c.id}">${c.name_of_center || 'Center'}</option>`).join('')}
             </select>
             <button type="submit" class="btn" style="width: auto; margin-top: 0;">Create User Account</button>
         </form>
@@ -163,15 +167,5 @@ const getAdminHTML = (centers = [], trainees = [], documents = []) => {
                 </tr>
             </thead>
             <tbody>
-                ${safeTrainees.map(t => `
+                ${safeTrainees.length === 0 ? '<tr><td colspan="7">No recorded submissions processed yet.</td></tr>' : safeTrainees.map(t => `
                     <tr>
-                        <td><code>${t.trainee_id}</code></td><td><strong>${t.full_name}</strong></td><td>${t.cnic}</td><td>${t.course_name}</td>
-                        <td>Dist: ${t.district || '-'}<br>Tehsil: ${t.tehsil || '-'}</td>
-                        <td>Vendor: ${t.vendor_number || '-'}<br>Acc: ${t.bank_account_number || '-'}<br>EasyPaisa: ${t.easypaisa_number || '-'}</td>
-                        <td><mark>${t.status}</mark></td>
-                    </tr>
-                `).join('')}
-            </tbody>
-        </table>
-    </div>
-
