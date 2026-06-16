@@ -7,7 +7,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const JWT_SECRET = process.env.JWT_SECRET || 'siw_balochistan_secure_key_2026';
 
-// Initialize Database Connection Pool with SSL Mode Forced
+// Initialize Database Connection Pool
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
@@ -45,7 +45,7 @@ const getIndexHTML = (centers, dbError = null) => {
         <h1>Small Industries Wing Balochistan</h1>
         <p>Government of Balochistan Directorate Portal System</p>
     </div>
-    ${dbError ? `<div class="alert-error"><strong>Active Notice:</strong> No data models loaded yet. Seed your Neon DB. Error: ${dbError}</div>` : ''}
+    ${dbError ? `<div class="alert-error"><strong>Database Status:</strong> Working Offline (Tables pending initialization). Connection message: ${dbError}</div>` : ''}
     <div class="wrapper">
         <div class="card">
             <h2>Trainee Registration Desk</h2>
@@ -56,7 +56,7 @@ const getIndexHTML = (centers, dbError = null) => {
                 <label>Target Assignment Training Center</label>
                 <select name="center_id" required>
                     <option value="">-- Choose Center Selection --</option>
-                    ${safeCenters.map(c => `<option value="${c.id}">${c.name_of_center || 'Unnamed Center'}</option>`).join('')}
+                    ${safeCenters.map(c => `<option value="${c.id}">${c.name_of_center || 'Center'}</option>`).join('')}
                 </select>
                 <label>Course Program</label><input type="text" name="course_name" placeholder="e.g. Computer Application" required>
                 
@@ -93,9 +93,6 @@ const getAdminHTML = (centers, trainees, documents) => {
   const safeTrainees = Array.isArray(trainees) ? trainees : [];
   const safeDocs = Array.isArray(documents) ? documents : [];
   
-  // Extract dynamic columns list safely with fallback protection
-  const dynamicCols = (safeCenters.length > 0 && safeCenters[0].dynamic_columns) ? Object.keys(safeCenters[0].dynamic_columns) : [];
-  
   return `
 <!DOCTYPE html>
 <html lang="en">
@@ -130,21 +127,14 @@ const getAdminHTML = (centers, trainees, documents) => {
         </form>
         <table>
             <thead>
-                <tr>
-                    <th>S.No</th><th>DDO Code</th><th>Name of Center</th><th>Status</th><th>Type</th><th>DDO Name</th>
-                    ${dynamicCols.map(col => `<th>${col.replace(/_/g, ' ')}</th>`).join('')}
-                </tr>
+                <tr><th>S.No</th><th>DDO Code</th><th>Name of Center</th><th>Status</th><th>Type</th><th>DDO Name</th></tr>
             </thead>
             <tbody>
-                ${safeCenters.length === 0 ? '<tr><td colspan="6">No centers found. Add centers via database or panel.</td></tr>' : safeCenters.map(c => `
+                ${safeCenters.map(c => `
                     <tr>
-                        <td>${c.s_no || '-'}</td>
-                        <td><code>${c.ddo_code || '-'}</code></td>
-                        <td><strong>${c.name_of_center || '-'}</strong></td>
-                        <td>${c.status || '-'}</td>
-                        <td>${c.type || '-'}</td>
-                        <td>${c.ddo_name || 'Unassigned'}</td>
-                        ${dynamicCols.map(col => `<td>${(c.dynamic_columns && c.dynamic_columns[col]) ? c.dynamic_columns[col] : '-'}</td>`).join('')}
+                        <td>${c.s_no || '-'}</td><td><code>${c.ddo_code || '-'}</code></td>
+                        <td><strong>${c.name_of_center || '-'}</strong></td><td>${c.status || '-'}</td>
+                        <td>${c.type || '-'}</td><td>${c.ddo_name || 'Unassigned'}</td>
                     </tr>
                 `).join('')}
             </tbody>
@@ -168,12 +158,23 @@ const getAdminHTML = (centers, trainees, documents) => {
         <h3>👥 Registered Trainees Ledger Profile</h3>
         <table>
             <thead>
-                <tr>
-                    <th>Trainee ID</th><th>Name</th><th>CNIC</th><th>Course</th>
-                    <th>Geographic Core</th><th>Financial Indicators</th><th>State</th>
-                </tr>
+                <tr><th>Trainee ID</th><th>Name</th><th>CNIC</th><th>Course</th><th>Geographic Core</th><th>Financial Indicators</th><th>State</th></tr>
             </thead>
             <tbody>
-                ${safeTrainees.length === 0 ? '<tr><td colspan="7">No registered trainee applications recorded yet.</td></tr>' : safeTrainees.map(t => `
+                ${safeTrainees.map(t => `
                     <tr>
-                        <td><code>${t.trainee_id || '-'}</code></td>
+                        <td><code>${t.trainee_id || '-'}</code></td><td><strong>${t.full_name || '-'}</strong></td><td>${t.cnic || '-'}</td><td>${t.course_name || '-'}</td>
+                        <td>Dist: ${t.district || '-'}<br>Tehsil: ${t.tehsil || '-'}</td>
+                        <td>Vendor: ${t.vendor_number || '-'}<br>Acc: ${t.bank_account_number || '-'}<br>EasyPaisa: ${t.easypaisa_number || '-'}</td>
+                        <td><mark>${t.status || 'Pending'}</mark></td>
+                    </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="doc-grid">
+        <div class="section">
+            <h3>📤 From Directorate to Training Centers</h3>
+            <form action="/admin/upload-document" method="POST" style="margin-bottom:15px;">
+                <input type="text" name="title" class="input-box" placeholder="Document Title" required><br><br>
