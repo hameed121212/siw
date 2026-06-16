@@ -1,1 +1,71 @@
+<div style="display:flex; justify-content: space-between; align-items: center;">
+    <h2>DDO Authorized Regional Terminal Control Engine</h2>
+    <a href="/logout" style="color:red; font-weight:bold;">Sign Out</a>
+</div>
 
+<% if(center) { %>
+    <div class="card" style="margin-top:20px; background-color:#eef7f4;">
+        <h3>Operational Station Baseline Profile: <%= center.center_name %></h3>
+        <p><strong>System DDO Code Identification Index:</strong> <%= center.ddo_code %> | <strong>Supervising Executive:</strong> <%= center.ddo_name %> | <strong>Operational Status Indicator:</strong> <%= center.status %> / <%= center.type %></p>
+    </div>
+<% } %>
+
+<div class="grid" style="margin-top:30px;">
+    <!-- REGIONAL SCOPE RESTRICTED DATA TABLE -->
+    <div class="card" style="grid-column: span 2;">
+        <h3>Locally Registered Site Trainees Array Profile</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Registration ID</th>
+                    <th>Full Name Legal Identity</th>
+                    <th>CNIC Key String</th>
+                    <th>Mobile Network Endpoint</th>
+                </tr>
+            </thead>
+            <tbody>
+                <% if(trainees.length === 0) { %>
+                    <tr><td colspan="4" style="text-align: center; color:gray;">No trainees currently registered for your dynamic center branch block allocation identifier.</td></tr>
+                <% } %>
+                <% trainees.forEach(t => { %>
+                    <tr>
+                        <td><strong><%= t.trainee_id %></strong></td>
+                        <td><%= t.full_name %></td>
+                        <td><%= t.cnic %></td>
+                        <td><%= t.phone %></td>
+                    </tr>
+                <% }) %>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- REGIONAL SUITE FILE MANAGEMENT CHANNELS -->
+    <div class="card">
+        <h3>Station Communications Node Hub</h3>
+        
+        <h4>1. Directorate Official Policy Directives & circulars (Read-Only)</h4>
+        <ul>
+            <% if(docsFromDir.length === 0) { %> <li><small style="color:gray;">No incoming orders listed.</small></li> <% } %>
+            <% docsFromDir.forEach(doc => { %>
+                <li><a href="/uploads/<%= doc.filename %>" target="_blank" style="font-weight:bold;"><%= doc.title %></a></li>
+            <% }) %>
+        </ul>
+
+        <hr style="border:1px solid #ddd; margin:20px 0;">
+
+        <h4>2. Upload Local Verification Files (Center ➔ Directorate)</h4>
+        <form action="/ddo/upload-doc" method="POST" enctype="multipart/form-data">
+            <input type="text" name="title" placeholder="Descriptive Report Name (e.g., June Attendance)" required>
+            <input type="file" name="document" required>
+            <button type="submit" style="background-color:#c29b38;">Transmit Upload File Pack</button>
+        </form>
+
+        <h5>Transmitted History Pipeline Verification Tracking Logs</h5>
+        <ul>
+            <% if(myDocs.length === 0) { %> <li><small style="color:gray;">No historical files transmitted yet.</small></li> <% } %>
+            <% myDocs.forEach(doc => { %>
+                <li><a href="/uploads/<%= doc.filename %>" target="_blank"><%= doc.title %></a> <small style="color:green;">(Transmitted Successfully)</small></li>
+            <% }) %>
+        </ul>
+    </div>
+</div>
