@@ -1,198 +1,259 @@
-require('dotenv').config();
 const express = require('express');
-const { Pool } = require('pg');
-const bcrypt = require('bcryptjs');
-const cookieParser = require('cookie-parser');
-const multer = require('multer');
 const path = require('path');
-const expressLayouts = require('express-ejs-layouts');
+const { Pool } = require('pg');
+const jwt = require('jsonwebtoken');
+const cookieParser = require('cookie-parser');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const JWT_SECRET = process.env.JWT_SECRET || 'siw_balochistan_secret_key_2026';
 
+// Neon Postgres Database Connection Pool Setup
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
 });
 
+// Configure Path Resolution and Engine for Vercel Serverless environment
+app.set('views', path.join(__dirname, 'public', 'views'));
+app.set('view engine', 'ejs');
+
+app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(cookieParser());
-app.use(express.static(path.join(__dirname, 'public')));
-app.use(expressLayouts);
 
-// Explicitly point Vercel to your absolute views directory path
-app.set('views', path.join(__dirname, 'views'));
-app.set('view engine', 'ejs');
-app.set('layout', 'layout');
-
-// Use temporary system memory for uploads instead of the crashing read-only disk storage
-const storage = multer.memoryStorage();
-const upload = multer({ storage });
-
-const checkAuth = (role) => (req, res, next) => {
-  const token = req.cookies.user;
-  if (!token) return res.status(401).send('Access Denied: Please Log In.');
-  if (role && token.role !== role) return res.status(403).send('Forbidden: Unauthorized.');
-  req.user = token;
-  next();
+// SECURITY MIDDLEWARE: Verifies roles and checks specific access permissions
+const verifyAccess = (role) => {
+  return (req, res, next) => {
+    const token = req.cookies.portal_token;
+    if (!token) return res.status(403).send('Access Denied: Please log in via the Terminal Panel.');
+    try {
+      const verified = jwt.verify(token, JWT_SECRET);
+      req.user = verified;
+      if (role && req.user.role !== role) {
+        return res.status(403).send('Access Denied: Insufficient authorization clearing level.');
+      }
+      next();
+    } catch (err) {
+      res.clearCookie('portal_token');
+      return res.status(401).send('Session expired or invalid token. Please log in again.');
+    }
+  };
 };
 
-/* --- PUBLIC ROUTES --- */
+// --- PUBLIC ROUTES ---
 
+// Render main login page and public registration forms
 app.get('/', async (req, res) => {
   try {
-    const centers = await pool.query('SELECT ddo_code, center_name FROM training_centers ORDER BY center_name ASC');
-    res.render('index', { title: 'Trainee Admission Portal', centers: centers.rows, successId: null });
+    const centersRes = await pool.query('SELECT * FROM training_centers WHERE status = \'Functional\' ORDER BY s_no ASC');
+    res.render('index', { centers: centersRes.rows });
   } catch (err) {
-    res.status(500).send('Database connection validation or view parsing fault.');
+    res.status(500).send('System boot error matching database endpoints.');
   }
 });
 
-app.post('/apply', async (req, res) => {
-  const { full_name, cnic, phone, ddo_code } = req.body;
+// Submit Enrolment Form Route
+app.post('/submit-trainee', async (req, res) => {
+  const { 
+    full_name, cnic, mobile_number, center_id, course_name,
+    district, tehsil, union_council, vendor_number, bank_account_number, easypaisa_number 
+  } = req.body;
+
   try {
-    const counts = await pool.query('SELECT COUNT(*) FROM trainees');
-    const runningId = parseInt(counts.rows[0].count) + 1;
-    const formattedId = `SIW-BAL-2026-${String(runningId).padStart(4, '0')}`;
+    const year = new Date().getFullYear();
+    const countRes = await pool.query('SELECT COUNT(*) FROM trainees WHERE trainee_id LIKE $1', [`SIW-BAL-${year}-%`]);
+    const nextSequence = String(parseInt(countRes.rows[0].count || 0) + 1).padStart(4, '0');
+    const uniqueTraineeId = `SIW-BAL-${year}-${nextSequence}`;
 
-    await pool.query(
-      'INSERT INTO trainees (trainee_id, full_name, cnic, phone, ddo_code) VALUES ($1, $2, $3, $4, $5)',
-      [formattedId, full_name, cnic, phone, ddo_code]
-    );
+    const insertQuery = `
+      INSERT INTO trainees (
+        trainee_id, full_name, cnic, mobile_number, center_id, course_name, 
+        district, tehsil, union_council, vendor_number, bank_account_number, easypaisa_number
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+    `;
 
-    const centers = await pool.query('SELECT ddo_code, center_name FROM training_centers ORDER BY center_name ASC');
-    res.render('index', { title: 'Registration Successful', centers: centers.rows, successId: formattedId });
+    await pool.query(insertQuery, [
+      uniqueTraineeId, full_name, cnic, mobile_number, center_id, course_name,
+      district, tehsil, union_council, vendor_number, bank_account_number, easypaisa_number
+    ]);
+
+    res.send(`<h3>Submission successful! Registered Trainee Identification ID: <span style="color:green;">${uniqueTraineeId}</span></h3><a href="/">Go Back</a>`);
   } catch (err) {
-    res.status(500).send('Error saving submission profile.');
+    console.error(err);
+    res.status(500).send('Database execution processing error.');
   }
 });
 
-app.post('/login', async (req, res) => {
+// Authentication System Route
+app.post('/auth/login', async (req, res) => {
   const { username, password } = req.body;
   try {
-    const userResult = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
-    if (userResult.rows.length === 0) return res.status(400).send('User reference index not found.');
-    
-    const user = userResult.rows[0];
-    const validPass = await bcrypt.compare(password, user.password);
-    if (!validPass) return res.status(400).send('Invalid credential parameters.');
+    const userRes = await pool.query('SELECT * FROM users WHERE username = $1', [username]);
+    const user = userRes.rows[0];
 
-    res.cookie('user', { id: user.id, username: user.username, role: user.role, ddo_code: user.ddo_code });
-    if (user.role === 'admin') return res.redirect('/admin');
-    return res.redirect('/ddo');
+    if (!user || user.password_hash !== password) {
+      return res.status(401).send('Invalid Terminal Username or Password String. <a href="/">Try Again</a>');
+    }
+
+    const token = jwt.sign(
+      { id: user.id, username: user.username, role: user.role, center_id: user.center_id },
+      JWT_SECRET,
+      { expiresIn: '5h' }
+    );
+
+    res.cookie('portal_token', token, { httpOnly: true, secure: true });
+
+    if (user.role === 'Admin') res.redirect('/admin/dashboard');
+    else res.redirect('/ddo/dashboard');
   } catch (err) {
-    res.status(500).send('Server Runtime Authentication Error.');
+    res.status(500).send('Login validation system breakdown.');
   }
 });
 
-app.get('/logout', (req, res) => {
-  res.clearCookie('user');
+app.get('/auth/logout', (req, res) => {
+  res.clearCookie('portal_token');
   res.redirect('/');
 });
 
-/* --- ADMIN ROUTES --- */
+// --- ADMIN DASHBOARD SECURE OPERATIONS ---
 
-app.get('/admin', checkAuth('admin'), async (req, res) => {
+app.get('/admin/dashboard', verifyAccess('Admin'), async (req, res) => {
   try {
-    const trainees = await pool.query('SELECT t.*, c.center_name FROM trainees t LEFT JOIN training_centers c ON t.ddo_code = c.ddo_code');
-    const centers = await pool.query('SELECT * FROM training_centers');
-    const docsToCenters = await pool.query("SELECT * FROM documents WHERE direction = 'directorate-to-center'");
-    const docsToDir = await pool.query("SELECT * FROM documents WHERE direction = 'center-to-directorate'");
-    const ddos = await pool.query("SELECT * FROM users WHERE role = 'ddo'");
+    const centers = await pool.query('SELECT * FROM training_centers ORDER BY s_no ASC');
+    const trainees = await pool.query('SELECT t.*, c.name_of_center FROM trainees t LEFT JOIN training_centers c ON t.center_id = c.id');
+    const documents = await pool.query('SELECT d.*, u.username FROM documents d LEFT JOIN users u ON d.uploaded_by = u.id');
+    const ddos = await pool.query('SELECT u.id, u.username, c.name_of_center FROM users u LEFT JOIN training_centers c ON u.center_id = c.id WHERE u.role = \'DDO\'');
 
-    res.render('admin', {
-      title: 'HQ System Admin Dashboard',
-      trainees: trainees.rows,
-      centers: centers.rows,
-      docsToCenters: docsToCenters.rows,
-      docsToDir: docsToDir.rows,
+    res.render('admin', { 
+      centers: centers.rows, 
+      trainees: trainees.rows, 
+      documents: documents.rows,
       ddos: ddos.rows
     });
   } catch (err) {
-    res.status(500).send('Error fetching data arrays.');
+    res.status(500).send('Failed loading Super Admin Registry records.');
   }
 });
 
-app.post('/admin/add-center', checkAuth('admin'), async (req, res) => {
-  const { ddo_code, center_name, status, type, ddo_name } = req.body;
+// Admin Add Center Route
+app.post('/admin/add-center', verifyAccess('Admin'), async (req, res) => {
+  const { s_no, ddo_code, name_of_center, status, type, ddo_name } = req.body;
   try {
     await pool.query(
-      'INSERT INTO training_centers (ddo_code, center_name, status, type, ddo_name) VALUES ($1, $2, $3, $4, $5)',
-      [ddo_code, center_name, status, type, ddo_name]
+      'INSERT INTO training_centers (s_no, ddo_code, name_of_center, status, type, ddo_name) VALUES ($1, $2, $3, $4, $5, $6)',
+      [s_no, ddo_code, name_of_center, status, type, ddo_name]
     );
-    res.redirect('/admin');
+    res.redirect('/admin/dashboard');
   } catch (err) {
-    res.status(500).send('Could not append center.');
+    res.status(500).send('Error adding new center record.');
   }
 });
 
-app.post('/admin/add-column', checkAuth('admin'), async (req, res) => {
-  const { column_name } = req.body;
-  if (!column_name) return res.redirect('/admin');
+// Admin Inject New Custom Column Tool
+app.post('/admin/add-column', verifyAccess('Admin'), async (req, res) => {
+  const { columnName } = req.body;
+  const safeKey = columnName.toLowerCase().replace(/[^a-z0-9]/g, '_');
   try {
-    await pool.query(`UPDATE training_centers SET extra_fields = extra_fields || jsonb_build_object($1::text, ''::text)`, [column_name]);
-    res.redirect('/admin');
+    await pool.query(`UPDATE training_centers SET dynamic_columns = dynamic_columns || jsonb_build_object($1, '')`, [safeKey]);
+    res.redirect('/admin/dashboard');
   } catch (err) {
-    res.status(500).send('Failed adding custom table structures.');
+    res.status(500).send('Failed to extend table schemas dynamic elements.');
   }
 });
 
-app.post('/admin/create-ddo-user', checkAuth('admin'), async (req, res) => {
-  const { username, password, ddo_code } = req.body;
+// Admin Update Dynamic Column Cell Values
+app.post('/admin/update-cell', verifyAccess('Admin'), async (req, res) => {
+  const { center_id, column_key, value } = req.body;
   try {
-    const salt = await bcrypt.genSalt(10);
-    const hashedPass = await bcrypt.hash(password, salt);
-    await pool.query('INSERT INTO users (username, password, role, ddo_code) VALUES ($1, $2, \'ddo\', $3)', [username, hashedPass, ddo_code]);
-    res.redirect('/admin');
+    await pool.query(
+      `UPDATE training_centers SET dynamic_columns = jsonb_set(dynamic_columns, ARRAY[$1], to_jsonb($2::text)) WHERE id = $3`,
+      [column_key, value, center_id]
+    );
+    res.json({ success: true });
   } catch (err) {
-    res.status(500).send('Execution collision: Username or DDO Code mapping constraint failure.');
+    res.status(500).json({ error: 'Failed cell data alteration rewrite.' });
   }
 });
 
-app.post('/admin/upload-doc', checkAuth('admin'), upload.single('document'), async (req, res) => {
+// Admin Create New DDO Access Route
+app.post('/admin/create-ddo', verifyAccess('Admin'), async (req, res) => {
+  const { username, password, center_id } = req.body;
   try {
-    const dummyFilename = Date.now() + '-' + req.file.originalname;
-    await pool.query('INSERT INTO documents (title, filename, direction) VALUES ($1, $2, $3)', [req.body.title, dummyFilename, 'directorate-to-center']);
-    res.redirect('/admin');
+    await pool.query(
+      'INSERT INTO users (username, password_hash, role, center_id) VALUES ($1, $2, \'DDO\', $3)',
+      [username, password, center_id]
+    );
+    res.redirect('/admin/dashboard');
   } catch (err) {
-    res.status(500).send('File save execution fault.');
+    res.status(500).send('Error generating unique DDO user credentials profile.');
   }
 });
 
-/* --- DDO ROUTES --- */
-
-app.get('/ddo', checkAuth('ddo'), async (req, res) => {
-  const ddoCode = req.user.ddo_code;
+// Admin Post Document (Directorate-to-Center)
+app.post('/admin/upload-doc', verifyAccess('Admin'), async (req, res) => {
+  const { title, file_url } = req.body;
   try {
-    const trainees = await pool.query('SELECT * FROM trainees WHERE ddo_code = $1', [ddoCode]);
-    const center = await pool.query('SELECT * FROM training_centers WHERE ddo_code = $1', [ddoCode]);
-    const docsFromDir = await pool.query("SELECT * FROM documents WHERE direction = 'directorate-to-center'");
-    const myDocs = await pool.query("SELECT * FROM documents WHERE direction = 'center-to-directorate' AND sender_ddo_code = $1", [ddoCode]);
+    await pool.query(
+      'INSERT INTO documents (title, file_url, direction, uploaded_by) VALUES ($1, $2, \'Directorate-to-Center\', $3)',
+      [title, file_url, req.user.id]
+    );
+    res.redirect('/admin/dashboard');
+  } catch (err) {
+    res.status(500).send('Document routing declaration breakdown.');
+  }
+});
+
+// --- DDO ISOLATED DASHBOARD OPERATIONS ---
+
+app.get('/ddo/dashboard', verifyAccess('DDO'), async (req, res) => {
+  try {
+    const centerRes = await pool.query('SELECT * FROM training_centers WHERE id = $1', [req.user.center_id]);
+    const trainees = await pool.query('SELECT * FROM trainees WHERE center_id = $1 ORDER BY id DESC', [req.user.center_id]);
+    const documents = await pool.query(
+      'SELECT d.*, u.username FROM documents d LEFT JOIN users u ON d.uploaded_by = u.id WHERE d.direction = \'Directorate-to-Center\' OR d.uploaded_by = $1',
+      [req.user.id]
+    );
 
     res.render('ddo', {
-      title: `DDO Portal Panel - Center ID: ${ddoCode}`,
+      center: centerRes.rows[0],
       trainees: trainees.rows,
-      center: center.rows[0] || null,
-      docsFromDir: docsFromDir.rows,
-      myDocs: myDocs.rows
+      documents: documents.rows
     });
   } catch (err) {
-    res.status(500).send('Data engine access parsing exception error.');
+    res.status(500).send('Failed loading isolated data metrics profile.');
   }
 });
 
-app.post('/ddo/upload-doc', checkAuth('ddo'), upload.single('document'), async (req, res) => {
+// DDO Modify Trainee Application Approval Status
+app.post('/ddo/update-trainee-status', verifyAccess('DDO'), async (req, res) => {
+  const { trainee_id, status } = req.body;
   try {
-    const dummyFilename = Date.now() + '-' + req.file.originalname;
     await pool.query(
-      'INSERT INTO documents (title, filename, direction, sender_ddo_code) VALUES ($1, $2, $3, $4)',
-      [req.body.title, dummyFilename, 'center-to-directorate', req.user.ddo_code]
+      'UPDATE trainees SET status = $1 WHERE id = $2 AND center_id = $3',
+      [status, trainee_id, req.user.center_id]
     );
-    res.redirect('/ddo');
+    res.redirect('/ddo/dashboard');
   } catch (err) {
-    res.status(500).send('DDO file pipeline upload failure.');
+    res.status(500).send('Authorization clearance manipulation block anomaly.');
   }
 });
 
-module.exports = app; // Allows Vercel's serverless engine to export the route configurations correctly
+// DDO Upload Document (Center-to-Directorate)
+app.post('/ddo/upload-doc', verifyAccess('DDO'), async (req, res) => {
+  const { title, file_url } = req.body;
+  try {
+    await pool.query(
+      'INSERT INTO documents (title, file_url, direction, uploaded_by) VALUES ($1, $2, \'Center-to-Directorate\', $3)',
+      [title, file_url, req.user.id]
+    );
+    res.redirect('/ddo/dashboard');
+  } catch (err) {
+    res.status(500).send('Document failed to stream up to directorate logs.');
+  }
+});
+
+module.exports = app;
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`SIW Server operational on port ${PORT}`));
